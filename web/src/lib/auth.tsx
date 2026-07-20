@@ -51,7 +51,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       let addr = walletAddr;
       if (!isConnected || !addr) {
-        const connector = connectors[0];
+        // Prefer an injected wallet (extension or wallet in-app browser);
+        // fall back to WalletConnect for plain mobile browsers.
+        const hasInjected = typeof window !== "undefined" && !!(window as any).ethereum;
+        const connector =
+          (hasInjected ? connectors.find((c) => c.id === "injected") : undefined) ??
+          connectors.find((c) => c.id === "walletConnect") ??
+          connectors[0];
         if (!connector) throw new Error("No wallet found. Install MetaMask or Rabby.");
         const result = await connectAsync({ connector });
         addr = result.accounts[0];

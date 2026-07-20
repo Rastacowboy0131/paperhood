@@ -1,7 +1,7 @@
 "use client";
 
 import { http, createConfig } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { injected, walletConnect } from "wagmi/connectors";
 import { defineChain } from "viem";
 
 // Robinhood chain (Arbitrum Orbit), chain id 4663.
@@ -14,9 +14,30 @@ export const robinhoodChain = defineChain({
   },
 });
 
+// WalletConnect enables mobile wallets (iOS/Android have no injected
+// extension provider). Requires a free project id from cloud.reown.com,
+// set as NEXT_PUBLIC_WC_PROJECT_ID; without it only injected wallets work.
+const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
+
 export const wagmiConfig = createConfig({
   chains: [robinhoodChain],
-  connectors: [injected()],
+  connectors: [
+    injected(),
+    ...(wcProjectId
+      ? [
+          walletConnect({
+            projectId: wcProjectId,
+            metadata: {
+              name: "PaperHood",
+              description: "RH chain paper trading terminal",
+              url: "https://paperhood-psi.vercel.app",
+              icons: [],
+            },
+            showQrModal: true,
+          }),
+        ]
+      : []),
+  ],
   transports: {
     [robinhoodChain.id]: http(),
   },
