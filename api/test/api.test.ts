@@ -261,6 +261,19 @@ test("GET /leaderboard has correct shape and includes the trader", async () => {
   }
   const bad = await app.inject({ method: "GET", url: "/leaderboard?period=monthly" });
   assert.equal(bad.statusCode, 400);
+
+  // Windowed API: ?window=1d|7d|all, invalid window rejected.
+  for (const w of ["1d", "7d", "all"] as const) {
+    const res = await app.inject({ method: "GET", url: `/leaderboard?window=${w}` });
+    assert.equal(res.statusCode, 200);
+    const body = res.json();
+    assert.equal(body.window, w);
+    assert.ok(Array.isArray(body.entries));
+    assert.equal(body.entries.length, 1);
+    assert.equal(body.entries[0].address, TESTER);
+  }
+  const badWin = await app.inject({ method: "GET", url: "/leaderboard?window=1h" });
+  assert.equal(badWin.statusCode, 400);
 });
 
 test("GET /auth/me reflects session, /portfolio without cookie is 401", async () => {

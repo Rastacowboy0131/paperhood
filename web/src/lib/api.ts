@@ -216,6 +216,8 @@ export const api = {
   cancelOrder: (id: number) => req<{ ok: boolean }>(`/orders/${id}`, { method: "DELETE" }),
   leaderboard: (period: "daily" | "weekly") =>
     req<{ period: string; entries: LeaderboardEntry[] }>(`/leaderboard?period=${period}`),
+  leaderboardWindow: (window: "1d" | "7d" | "all") =>
+    req<{ window: string; entries: LeaderboardEntry[] }>(`/leaderboard?window=${window}`),
   nonce: () => req<{ nonce: string; expiresInS: number }>("/auth/nonce"),
   verify: (message: string, signature: string) =>
     req<{ ok: boolean; user: { userId: number; address: string } }>("/auth/verify", {

@@ -9,7 +9,7 @@ import { openDb } from "../../engine/src/db.js";
 import { quoteSwap, getTokenMeta } from "../../engine/src/quote.js";
 import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd } from "../../engine/src/ledger.js";
 import { createOrder, listOrders, cancelOrder, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
-import { dailyLeaderboard, weeklyLeaderboard } from "../../engine/src/leaderboard.js";
+import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, LeaderboardWindow } from "../../engine/src/leaderboard.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, EXPLORER_URL } from "./tokeninfo.js";
@@ -339,7 +339,16 @@ export async function buildServer(opts: BuildOpts = {}) {
   // ---------- leaderboard ----------
 
   app.get("/leaderboard", async (req, reply) => {
-    const period = (req.query as { period?: string }).period || "weekly";
+    const q = req.query as { period?: string; window?: string };
+    // New windowed API: ?window=1d|7d|all (rolling windows, all seasons).
+    if (q.window != null) {
+      if (q.window !== "1d" && q.window !== "7d" && q.window !== "all") {
+        return reply.code(400).send({ error: "window must be 1d, 7d, or all" });
+      }
+      return { window: q.window, entries: windowLeaderboard(db, q.window as LeaderboardWindow) };
+    }
+    // Backward compat: ?period=daily|weekly (season-scoped, UTC day / season start).
+    const period = q.period || "weekly";
     if (period !== "daily" && period !== "weekly") {
       return reply.code(400).send({ error: "period must be daily or weekly" });
     }

@@ -9,7 +9,7 @@ import {
   getOrCreateUser, getSeasonId, seasonStart, buy, sell, cashBalanceUsd,
   positionQty, getPortfolio, setEthUsdForTest, STARTING_BALANCE_USD, realizedPnl, maxBuyTokens,
 } from "../src/ledger.js";
-import { weeklyLeaderboard, dailyLeaderboard } from "../src/leaderboard.js";
+import { weeklyLeaderboard, dailyLeaderboard, windowLeaderboard } from "../src/leaderboard.js";
 
 const WETH = "0x00000000000000000000000000000000000000aa";
 const MEME = "0x00000000000000000000000000000000000000bb";
@@ -121,6 +121,19 @@ test("leaderboards rank by realized PnL pct", async () => {
 
   const daily = dailyLeaderboard(db);
   assert.equal(daily[0].address, "0x1111111111111111111111111111111111111111");
+
+  // Windowed leaderboard: all three windows include both traders (trades are
+  // fresh), winner ranked first by realized PnL USD.
+  for (const w of ["1d", "7d", "all"] as const) {
+    const lb = windowLeaderboard(db, w);
+    assert.equal(lb.length, 2, `window ${w}`);
+    assert.equal(lb[0].address, "0x1111111111111111111111111111111111111111");
+    assert.ok(lb[0].realizedPnlUsd > 0 && lb[1].realizedPnlUsd < 0);
+    assert.ok(lb[0].trades >= 2);
+  }
+  // A window starting in the future excludes everyone.
+  const future = windowLeaderboard(db, "1d", Math.floor(Date.now() / 1000) + 10 * 86400);
+  assert.equal(future.length, 0);
 });
 
 test("season boundaries are Mondays 00:00 UTC", () => {

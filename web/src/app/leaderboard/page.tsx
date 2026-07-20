@@ -4,21 +4,27 @@ import { useEffect, useState } from "react";
 import { api, LeaderboardEntry, fmtUsd } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-type Period = "daily" | "weekly";
+type Period = "1d" | "7d" | "all";
+
+const TABS: { key: Period; label: string }[] = [
+  { key: "1d", label: "Daily" },
+  { key: "7d", label: "Weekly" },
+  { key: "all", label: "All time" },
+];
 
 export default function LeaderboardPage() {
   const { address } = useAuth();
-  const [period, setPeriod] = useState<Period>("daily");
+  const [period, setPeriod] = useState<Period>("1d");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     api
-      .leaderboard(period)
+      .leaderboardWindow(period)
       .then((r) => setEntries(r.entries))
       .catch((e) => setErr(e.message));
     const id = setInterval(() => {
-      api.leaderboard(period).then((r) => setEntries(r.entries)).catch(() => {});
+      api.leaderboardWindow(period).then((r) => setEntries(r.entries)).catch(() => {});
     }, 20000);
     return () => clearInterval(id);
   }, [period]);
@@ -31,13 +37,13 @@ export default function LeaderboardPage() {
         <h1 className="text-lg font-bold">Leaderboard</h1>
         <span className="text-xs text-term-dim">realized PnL only</span>
         <div className="ml-auto flex gap-1">
-          {(["daily", "weekly"] as Period[]).map((p) => (
+          {TABS.map((t) => (
             <button
-              key={p}
-              onClick={() => setPeriod(p)}
-              className={`rounded px-3 py-1 text-sm ${period === p ? "bg-term-accent text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
+              key={t.key}
+              onClick={() => setPeriod(t.key)}
+              className={`rounded px-3 py-1 text-sm ${period === t.key ? "bg-term-accent text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
             >
-              {p}
+              {t.label}
             </button>
           ))}
         </div>
@@ -84,7 +90,7 @@ export default function LeaderboardPage() {
             {!entries.length && !err && (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-center text-term-dim">
-                  No closed trades this {period === "daily" ? "day" : "week"} yet.
+                  No closed trades in this window yet.
                 </td>
               </tr>
             )}

@@ -50,3 +50,48 @@ export function dailyLeaderboard(db: DatabaseSync, nowSec: number = Math.floor(D
   const dayStart = nowSec - (nowSec % 86400);
   return rank(db, seasonId, dayStart);
 }
+
+// ---------- windowed leaderboard (main page podium) ----------
+// Windows: 1d = rolling 24h, 7d = rolling 7 days, all = everything.
+// Ranking is realized PnL only (FIFO within each season), summed across all
+// seasons the user traded in. Unrealized PnL change is intentionally excluded:
+// marking every open position requires a pool quote per position per user,
+// which is too expensive for a page that refreshes every 30-60s.
+
+export type LeaderboardWindow = "1d" | "7d" | "all";
+
+export function windowLeaderboard(
+  db: DatabaseSync,
+  window: LeaderboardWindow,
+  nowSec: number = Math.floor(Date.now() / 1000)
+): LeaderboardEntry[] {
+  const sinceTs = window === "1d" ? nowSec - 86400 : window === "7d" ? nowSec - 7 * 86400 : 0;
+
+  const users = db.prepare(
+    `SELECT u.id, u.address FROM users u
+     WHERE EXISTS (SELECT 1 FROM trades t WHERE t.user_id = u.id AND t.ts >= ?)`
+  ).all(sinceTs) as { id: number; address: string }[];
+
+  const entries: LeaderboardEntry[] = [];
+  for (const u of users) {
+    const seasons = db.prepare(
+      "SELECT DISTINCT season_id FROM trades WHERE user_id = ?"
+    ).all(u.id) as { season_id: number }[];
+    let pnl = 0;
+    for (const s of seasons) pnl += realizedPnl(db, u.id, s.season_id, sinceTs);
+    const trades = (db.prepare(
+      "SELECT COUNT(*) AS c FROM trades WHERE user_id = ? AND ts >= ?"
+    ).get(u.id, sinceTs) as { c: number }).c;
+    if (trades === 0) continue;
+    entries.push({
+      userId: u.id,
+      address: u.address,
+      display: truncateAddress(u.address),
+      realizedPnlUsd: pnl,
+      pnlPct: (pnl / STARTING_BALANCE_USD) * 100,
+      trades,
+    });
+  }
+  entries.sort((a, b) => b.realizedPnlUsd - a.realizedPnlUsd);
+  return entries;
+}

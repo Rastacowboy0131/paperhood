@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, TokenRow, fmtUsd, fmtCompact, fmtMcap } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
 import { useDenom } from "@/lib/denom";
+import Leaderboard from "@/components/Leaderboard";
 
 type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd";
 
@@ -85,6 +86,7 @@ export default function Screener() {
 
   return (
     <div>
+      <Leaderboard />
       <div className="mb-3 flex items-center gap-3">
         <input
           value={search}
