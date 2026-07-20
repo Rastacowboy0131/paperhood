@@ -59,8 +59,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           connectors.find((c) => c.id === "walletConnect") ??
           connectors[0];
         if (!connector) throw new Error("No wallet found. Install MetaMask or Rabby.");
-        const result = await connectAsync({ connector });
-        addr = result.accounts[0];
+        // Sign-in only needs a signature, not the wallet on the RH chain.
+        // Many mobile wallets reject adding/switching to chain 4663, so
+        // tolerate switch-chain failures as long as we got an account.
+        let accounts: readonly `0x${string}`[] = [];
+        try {
+          const result = await connectAsync({ connector });
+          accounts = result.accounts;
+        } catch (e: any) {
+          const msg = String(e?.message || "");
+          if (/switch chain|switching chain|addEthereumChain|Unrecognized chain|unsupported chain/i.test(msg)) {
+            accounts = await connector.getAccounts().catch(() => [] as `0x${string}`[]);
+          }
+          if (!accounts.length) throw e;
+        }
+        addr = accounts[0];
       }
       if (!addr) throw new Error("No account");
       const { nonce } = await api.nonce();
