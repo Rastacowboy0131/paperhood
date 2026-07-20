@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, Candle, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
+import { api, Candle, Order, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
-import { CandleChart } from "@/components/CandleChart";
+import { CandleChart, ChartLine } from "@/components/CandleChart";
 import { TokenInfoTabs } from "@/components/TokenInfoTabs";
 import { useAuth } from "@/lib/auth";
 import { useDenom, fmtEth } from "@/lib/denom";
@@ -39,6 +39,9 @@ const BUY_PRESETS: Record<"usd" | "eth", number[]> = {
   eth: [0.01, 0.05, 0.1, 0.5],
 };
 
+// Quick-sell presets: percent of current position.
+const SELL_PRESETS = [25, 50, 75, 100];
+
 // Max single-buy cap: min(3.5% of total supply, 35,000,000 tokens).
 // Mirrors the server-side enforcement in engine/src/ledger.ts.
 const MAX_BUY_SUPPLY_PCT = 3.5;
@@ -67,6 +70,13 @@ export default function TradePage() {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteErr, setQuoteErr] = useState<string | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
+  const [orderType, setOrderType] = useState<"limit" | "stop">("limit");
+  const [orderTrigger, setOrderTrigger] = useState("");
+  const [orderAmount, setOrderAmount] = useState("100");
+  const [orderMsg, setOrderMsg] = useState<string | null>(null);
+  const [placing, setPlacing] = useState(false);
   const [trading, setTrading] = useState(false);
   const [tradeMsg, setTradeMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -103,6 +113,17 @@ export default function TradePage() {
   }, [user, address]);
 
   useEffect(refreshPosition, [refreshPosition]);
+
+  const refreshOrders = useCallback(() => {
+    if (!user) return setOrders([]);
+    api.orders(address).then((r) => setOrders(r.orders)).catch(() => setOrders([]));
+  }, [user, address]);
+
+  useEffect(() => {
+    refreshOrders();
+    const id = setInterval(refreshOrders, 15000);
+    return () => clearInterval(id);
+  }, [refreshOrders]);
 
   // Live quote preview, debounced.
   useEffect(() => {
@@ -173,6 +194,41 @@ export default function TradePage() {
     }
   }
 
+  async function placeOrder() {
+    if (!detail) return;
+    setPlacing(true);
+    setOrderMsg(null);
+    try {
+      const trigger = parseFloat(orderTrigger);
+      const amount = parseFloat(orderAmount);
+      // Trigger is entered in the current display denom; convert to quote (ETH) terms.
+      const triggerQuote = denom === "eth" ? trigger : ethUsd > 0 ? trigger / ethUsd : NaN;
+      await api.createOrder({
+        token: detail.address,
+        side: orderSide,
+        type: orderSide === "buy" ? "limit" : orderType,
+        triggerPrice: triggerQuote,
+        amount,
+      });
+      setOrderMsg("Order placed");
+      setOrderTrigger("");
+      refreshOrders();
+    } catch (e: any) {
+      setOrderMsg(`Order failed: ${e.message}`);
+    } finally {
+      setPlacing(false);
+    }
+  }
+
+  async function cancelOrder(id: number) {
+    try {
+      await api.cancelOrder(id);
+      refreshOrders();
+    } catch (e: any) {
+      setOrderMsg(`Cancel failed: ${e.message}`);
+    }
+  }
+
   if (err) {
     return (
       <div className="py-12 text-center text-term-red">
@@ -192,6 +248,26 @@ export default function TradePage() {
       ? (quoteOutDec / detail.totalSupply) * 100
       : null;
   const overCap = side === "buy" && quoteOutDec != null && quoteOutDec > capTokens;
+
+  // Avg entry in USD per token from FIFO cost basis over the open position.
+  const avgEntryUsd = position && position.qtyDec > 0 ? position.costBasisUsd / position.qtyDec : null;
+  // Chart lines are in quote (ETH) terms, same unit as candles.
+  const avgEntryQuote = avgEntryUsd != null && ethUsd > 0 ? avgEntryUsd / ethUsd : null;
+  const chartLines: ChartLine[] =
+    metric === "price"
+      ? [
+          ...(avgEntryQuote != null ? [{ price: avgEntryQuote, color: "#f59e0b", title: "avg entry" }] : []),
+          ...orders
+            .filter((o) => o.status === "open")
+            .map((o) => ({
+              price: o.triggerPrice,
+              color: o.side === "buy" || (o.side === "sell" && o.type === "limit") ? "#22c55e" : "#ef4444",
+              title: o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP",
+            })),
+        ]
+      : [];
+  const openOrders = orders.filter((o) => o.status === "open");
+  const pastOrders = orders.filter((o) => o.status !== "open").slice(0, 10);
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -253,6 +329,7 @@ export default function TradePage() {
             <CandleChart
               candles={candles}
               compact={metric === "mcap"}
+              lines={chartLines}
               multiplier={
                 (denom === "eth" ? 1 : ethUsd || 1) *
                 (metric === "mcap" ? detail.totalSupply ?? 1 : 1)
@@ -324,6 +401,19 @@ export default function TradePage() {
                 inputMode="decimal"
                 className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-2 outline-none focus:border-term-accent"
               />
+              <span className="mt-2 flex gap-1">
+                {SELL_PRESETS.map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    disabled={!position}
+                    onClick={() => setSellPct(String(v))}
+                    className={`num flex-1 rounded border px-2 py-1 text-xs disabled:opacity-40 ${sellPct === String(v) ? "border-term-accent text-term-accent" : "border-term-border text-term-dim hover:text-term-text"}`}
+                  >
+                    {v}%
+                  </button>
+                ))}
+              </span>
             </label>
           )}
 
@@ -407,6 +497,14 @@ export default function TradePage() {
                   {fmtCompact(position.qtyDec)} {detail.symbol}
                 </span>
               </div>
+              {avgEntryUsd != null && (
+                <div className="flex justify-between">
+                  <span className="text-term-dim">Avg entry</span>
+                  <span className="num">
+                    {denom === "eth" && ethUsd > 0 ? `${fmtEth(avgEntryUsd / ethUsd)} ETH` : `$${fmtUsd(avgEntryUsd)}`}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-term-dim">Cost basis</span>
                 <span className="num">${fmtUsd(position.costBasisUsd, 2)}</span>
@@ -419,9 +517,129 @@ export default function TradePage() {
                 <span className="text-term-dim">Unrealized PnL</span>
                 <span className={`num ${position.unrealizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
                   {position.unrealizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(position.unrealizedPnlUsd, 2)}
+                  {position.costBasisUsd > 0 && (
+                    <> ({position.unrealizedPnlUsd >= 0 ? "+" : ""}{((position.unrealizedPnlUsd / position.costBasisUsd) * 100).toFixed(2)}%)</>
+                  )}
                 </span>
               </div>
             </div>
+          </div>
+        )}
+
+        {user && (
+          <div className="rounded border border-term-border bg-term-panel p-4 text-sm">
+            <div className="mb-2 font-semibold">Orders</div>
+            <div className="mb-2 flex gap-1">
+              <button
+                onClick={() => setOrderSide("buy")}
+                className={`flex-1 rounded py-1 text-xs font-semibold ${orderSide === "buy" ? "bg-term-green text-black" : "border border-term-border text-term-dim"}`}
+              >
+                Limit buy
+              </button>
+              <button
+                onClick={() => { setOrderSide("sell"); setOrderType("limit"); }}
+                className={`flex-1 rounded py-1 text-xs font-semibold ${orderSide === "sell" && orderType === "limit" ? "bg-term-green text-black" : "border border-term-border text-term-dim"}`}
+              >
+                TP
+              </button>
+              <button
+                onClick={() => { setOrderSide("sell"); setOrderType("stop"); }}
+                className={`flex-1 rounded py-1 text-xs font-semibold ${orderSide === "sell" && orderType === "stop" ? "bg-term-red text-black" : "border border-term-border text-term-dim"}`}
+              >
+                SL
+              </button>
+            </div>
+            <label className="mb-2 block text-xs">
+              <span className="flex justify-between text-term-dim">
+                Trigger price ({denom === "eth" ? "ETH" : "USD"})
+                <button
+                  type="button"
+                  className="text-term-accent hover:underline"
+                  onClick={() => {
+                    const now = denom === "eth" ? priceQuote : priceUsd;
+                    if (now != null) setOrderTrigger(String(now));
+                  }}
+                >
+                  now: {denom === "eth" ? (priceQuote != null ? fmtEth(priceQuote) : "-") : priceUsd != null ? `$${fmtUsd(priceUsd)}` : "-"}
+                </button>
+              </span>
+              <input
+                value={orderTrigger}
+                onChange={(e) => setOrderTrigger(e.target.value)}
+                inputMode="decimal"
+                placeholder="trigger price"
+                className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-1.5 outline-none focus:border-term-accent"
+              />
+            </label>
+            <label className="mb-2 block text-xs">
+              <span className="text-term-dim">{orderSide === "buy" ? "Amount (USD)" : "Sell % of position"}</span>
+              <input
+                value={orderAmount}
+                onChange={(e) => setOrderAmount(e.target.value)}
+                inputMode="decimal"
+                className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-1.5 outline-none focus:border-term-accent"
+              />
+              {orderSide === "sell" && (
+                <span className="mt-1 flex gap-1">
+                  {SELL_PRESETS.map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setOrderAmount(String(v))}
+                      className={`num flex-1 rounded border px-2 py-0.5 text-[10px] ${orderAmount === String(v) ? "border-term-accent text-term-accent" : "border-term-border text-term-dim hover:text-term-text"}`}
+                    >
+                      {v}%
+                    </button>
+                  ))}
+                </span>
+              )}
+            </label>
+            <button
+              onClick={placeOrder}
+              disabled={placing || !parseFloat(orderTrigger) || !parseFloat(orderAmount) || (orderSide === "sell" && !position)}
+              className="w-full rounded bg-term-accent py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+            >
+              {placing ? "Placing..." : "Place order"}
+            </button>
+            {orderMsg && <div className="mt-2 text-xs">{orderMsg}</div>}
+
+            {openOrders.length > 0 && (
+              <div className="mt-3 space-y-1 text-xs">
+                <div className="text-term-dim">Open</div>
+                {openOrders.map((o) => (
+                  <div key={o.id} className="flex items-center justify-between rounded bg-term-bg px-2 py-1">
+                    <span className={`num ${o.side === "buy" || o.type === "limit" ? "text-term-green" : "text-term-red"}`}>
+                      {o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP"}
+                    </span>
+                    <span className="num">
+                      @ {denom === "eth" ? `${fmtEth(o.triggerPrice)} ETH` : `$${fmtUsd(o.triggerPrice * ethUsd)}`}
+                    </span>
+                    <span className="num text-term-dim">{o.side === "buy" ? `$${fmtUsd(o.amount, 2)}` : `${o.amount}%`}</span>
+                    <button onClick={() => cancelOrder(o.id)} className="text-term-red hover:underline">
+                      cancel
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {pastOrders.length > 0 && (
+              <div className="mt-3 space-y-1 text-xs">
+                <div className="text-term-dim">Recent</div>
+                {pastOrders.map((o) => (
+                  <div key={o.id} className="flex items-center justify-between rounded px-2 py-1 text-term-dim">
+                    <span className="num">{o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP"}</span>
+                    <span className="num">@ {denom === "eth" ? `${fmtEth(o.triggerPrice)} ETH` : `$${fmtUsd(o.triggerPrice * ethUsd)}`}</span>
+                    <span
+                      className={`num ${o.status === "filled" ? "text-term-green" : o.status === "failed" ? "text-term-red" : ""}`}
+                      title={o.failReason ?? undefined}
+                    >
+                      {o.status}
+                      {o.status === "filled" && o.filledPriceUsd != null ? ` $${fmtUsd(o.filledPriceUsd)}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

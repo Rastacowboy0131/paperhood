@@ -79,6 +79,21 @@ export interface TradeResult {
   path?: string;
 }
 
+export interface Order {
+  id: number;
+  token: string;
+  pair: string;
+  side: "buy" | "sell";
+  type: "limit" | "stop";
+  triggerPrice: number;
+  amount: number;
+  status: "open" | "filled" | "cancelled" | "failed";
+  failReason: string | null;
+  createdAt: number;
+  filledAt: number | null;
+  filledPriceUsd: number | null;
+}
+
 // Rows in portfolio.history.
 export interface HistoryRow {
   id: number;
@@ -194,6 +209,11 @@ export const api = {
   trade: (body: { token: string; side: "buy" | "sell"; amount: string | number }) =>
     req<TradeResult>("/trade", { method: "POST", body: JSON.stringify(body) }),
   portfolio: () => req<Portfolio>("/portfolio"),
+  orders: (token?: string) =>
+    req<{ orders: Order[] }>(`/orders${token ? `?token=${token}` : ""}`),
+  createOrder: (body: { token: string; side: "buy" | "sell"; type: "limit" | "stop"; triggerPrice: number; amount: number }) =>
+    req<{ order: Order }>("/orders", { method: "POST", body: JSON.stringify(body) }),
+  cancelOrder: (id: number) => req<{ ok: boolean }>(`/orders/${id}`, { method: "DELETE" }),
   leaderboard: (period: "daily" | "weekly") =>
     req<{ period: string; entries: LeaderboardEntry[] }>(`/leaderboard?period=${period}`),
   nonce: () => req<{ nonce: string; expiresInS: number }>("/auth/nonce"),
