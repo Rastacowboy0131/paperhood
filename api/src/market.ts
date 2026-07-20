@@ -10,7 +10,7 @@ export interface TokenListItem {
   version: string;
   liquidityUsd: number;
   volume24hUsd: number;
-  priceQuote: number | null;   // token price in quote-token units (usually WETH), raw ratio
+  priceQuote: number | null;   // quote tokens per 1 token, decimal adjusted (usually WETH)
   priceUsd: number | null;
   change24hPct: number | null;
 }

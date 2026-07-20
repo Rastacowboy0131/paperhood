@@ -13,6 +13,18 @@ fs.mkdirSync(dataDir, { recursive: true });
 export const db = new DatabaseSync(path.join(dataDir, "paperhood.sqlite"));
 db.exec("PRAGMA journal_mode = WAL");
 
+// Schema version. Bump when the shape or meaning of indexer data changes.
+// v2: normalized prices (quote per tracked token, decimal adjusted) plus
+// token0/token1/decimals on pools. Old snapshots/candles held raw ratios,
+// so they are dropped on upgrade (data is short-lived by design).
+const SCHEMA_VERSION = 2;
+const row = db.prepare("PRAGMA user_version").get() as { user_version: number };
+if (row.user_version !== SCHEMA_VERSION) {
+  console.log(`schema version ${row.user_version} -> ${SCHEMA_VERSION}: dropping indexer tables`);
+  db.exec("DROP TABLE IF EXISTS pools; DROP TABLE IF EXISTS snapshots; DROP TABLE IF EXISTS candles;");
+  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+}
+
 db.exec(`
 CREATE TABLE IF NOT EXISTS pools (
   pair_address TEXT PRIMARY KEY,
@@ -23,6 +35,11 @@ CREATE TABLE IF NOT EXISTS pools (
   version TEXT,           -- v2 | v3 | v4
   quote_token TEXT,
   quote_symbol TEXT,
+  token0 TEXT,             -- pool token0 address, lowercase
+  token1 TEXT,             -- pool token1 address, lowercase
+  decimals0 INTEGER,
+  decimals1 INTEGER,
+  fee INTEGER,             -- pool fee tier, cached by the engine
   liquidity_usd REAL,
   volume24h REAL,
   active INTEGER DEFAULT 1,
@@ -39,7 +56,7 @@ CREATE TABLE IF NOT EXISTS snapshots (
   sqrt_price_x96 TEXT,          -- v3
   tick INTEGER,                 -- v3
   liquidity TEXT,               -- v3
-  price REAL                    -- token price in quote units, derived
+  price REAL                    -- quote tokens per 1 tracked token, decimal adjusted
 );
 CREATE INDEX IF NOT EXISTS idx_snap_pair_ts ON snapshots(pair_address, ts);
 
