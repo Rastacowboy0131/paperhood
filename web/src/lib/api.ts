@@ -16,6 +16,8 @@ export interface TokenRow {
   priceUsd: number;
   change24hPct: number;
   decimals?: number;
+  totalSupply?: number | null;
+  mcapUsd?: number | null;
 }
 
 export interface TokensResponse {

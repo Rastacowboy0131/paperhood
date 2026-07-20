@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { createChart, IChartApi, ISeriesApi, ColorType } from "lightweight-charts";
 import { Candle } from "@/lib/api";
 
-export function CandleChart({ candles, ethUsd }: { candles: Candle[]; ethUsd: number }) {
+export function CandleChart({ candles, multiplier }: { candles: Candle[]; multiplier: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -54,14 +54,14 @@ export function CandleChart({ candles, ethUsd }: { candles: Candle[]; ethUsd: nu
     if (!seriesRef.current) return;
     const data = candles.map((c) => ({
       time: c.t as any,
-      open: c.o * ethUsd,
-      high: c.h * ethUsd,
-      low: c.l * ethUsd,
-      close: c.c * ethUsd,
+      open: c.o * multiplier,
+      high: c.h * multiplier,
+      low: c.l * multiplier,
+      close: c.c * multiplier,
     }));
     seriesRef.current.setData(data);
     chartRef.current?.timeScale().fitContent();
-  }, [candles, ethUsd]);
+  }, [candles, multiplier]);
 
   return <div ref={containerRef} className="w-full" />;
 }

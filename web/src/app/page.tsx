@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, TokenRow, fmtUsd, fmtCompact } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
+import { useDenom, fmtEth } from "@/lib/denom";
 
 type SortKey = "symbol" | "priceUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd";
 
@@ -15,7 +16,7 @@ export default function Screener() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("liquidityUsd");
   const [sortDesc, setSortDesc] = useState(true);
-  const [denom, setDenom] = useState<"usd" | "eth">("usd");
+  const [denom, setDenom] = useDenom();
 
   useEffect(() => {
     api
@@ -121,7 +122,7 @@ export default function Screener() {
                   {denom === "usd"
                     ? `$${fmtUsd(t.priceUsd)}`
                     : t.priceQuote != null
-                      ? `${t.priceQuote.toPrecision(6)} ETH`
+                      ? `${fmtEth(t.priceQuote)} ETH`
                       : "-"}
                 </td>
                 <td

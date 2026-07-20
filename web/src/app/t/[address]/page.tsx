@@ -7,6 +7,7 @@ import { api, Candle, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, tr
 import { useLivePrices } from "@/lib/ws";
 import { CandleChart } from "@/components/CandleChart";
 import { useAuth } from "@/lib/auth";
+import { useDenom, fmtEth } from "@/lib/denom";
 
 interface TokenDetail {
   address: string;
@@ -25,9 +26,11 @@ interface TokenDetail {
   priceQuote: number | null;
   priceUsd: number | null;
   change24hPct: number | null;
+  totalSupply: number | null;
+  mcapUsd: number | null;
 }
 
-const TFS = ["1m", "5m", "1h"] as const;
+const TFS = ["1m", "5m", "1h", "1d"] as const;
 
 export default function TradePage() {
   const params = useParams<{ address: string }>();
@@ -38,8 +41,10 @@ export default function TradePage() {
   const [ethUsd, setEthUsd] = useState(0);
   const [tf, setTf] = useState<(typeof TFS)[number]>("5m");
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [metric, setMetric] = useState<"price" | "mcap">("price");
   const [side, setSide] = useState<"buy" | "sell">("buy");
-  const [amountUsd, setAmountUsd] = useState("100");
+  const [denom, setDenom] = useDenom();
+  const [amountBuy, setAmountBuy] = useState("100");
   const [sellPct, setSellPct] = useState("100");
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteErr, setQuoteErr] = useState<string | null>(null);
@@ -50,6 +55,7 @@ export default function TradePage() {
 
   const live = useLivePrices(useMemo(() => (address ? [address] : []), [address]));
   const livePrice = live[address?.toLowerCase()]?.price;
+  const priceQuote = livePrice ?? detail?.priceQuote ?? null;
   const priceUsd =
     livePrice !== undefined ? livePrice * ethUsd : detail?.priceUsd ?? null;
 
@@ -90,9 +96,9 @@ export default function TradePage() {
     let tokenIn: string;
     let tokenOut: string;
     if (side === "buy") {
-      const usd = parseFloat(amountUsd);
-      if (!usd || usd <= 0) return;
-      const eth = usd / ethUsd;
+      const n = parseFloat(amountBuy);
+      if (!n || n <= 0) return;
+      const eth = denom === "eth" ? n : n / ethUsd;
       amountIn = BigInt(Math.round(eth * 1e18));
       tokenIn = detail.pool.quoteToken;
       tokenOut = detail.address;
@@ -112,7 +118,14 @@ export default function TradePage() {
         .catch((e) => setQuoteErr(e.message));
     }, 350);
     return () => clearTimeout(t);
-  }, [detail, ethUsd, side, amountUsd, sellPct, position]);
+  }, [detail, ethUsd, side, amountBuy, denom, sellPct, position]);
+
+  // Entered buy amount converted to USD (what the trade endpoint expects).
+  function buyAmountUsd(): number {
+    const n = parseFloat(amountBuy);
+    if (!n || n <= 0) return 0;
+    return denom === "eth" ? n * ethUsd : n;
+  }
 
   async function executeTrade() {
     if (!detail) return;
@@ -121,7 +134,7 @@ export default function TradePage() {
     try {
       let res;
       if (side === "buy") {
-        res = await api.trade({ token: detail.address, side: "buy", amount: parseFloat(amountUsd) });
+        res = await api.trade({ token: detail.address, side: "buy", amount: buyAmountUsd() });
         setTradeMsg(
           `Bought ${fmtCompact(Number(res.tokensOut) / 10 ** (detail.decimals ?? 18))} ${detail.symbol} for $${fmtUsd(res.usdIn, 2)} (impact ${res.priceImpactPct?.toFixed(2)}%)`
         );
@@ -162,7 +175,15 @@ export default function TradePage() {
         <div className="mb-3 flex flex-wrap items-baseline gap-3">
           <h1 className="text-xl font-bold">{detail.symbol}</h1>
           <span className="text-term-dim">{detail.name}</span>
-          <span className="num text-lg">{priceUsd != null ? `$${fmtUsd(priceUsd)}` : "-"}</span>
+          <span className="num text-lg">
+            {denom === "eth"
+              ? priceQuote != null
+                ? `${fmtEth(priceQuote)} ETH`
+                : "-"
+              : priceUsd != null
+                ? `$${fmtUsd(priceUsd)}`
+                : "-"}
+          </span>
           {typeof detail.change24hPct === "number" && (
             <span className={`num ${detail.change24hPct >= 0 ? "text-term-green" : "text-term-red"}`}>
               {detail.change24hPct >= 0 ? "+" : ""}
@@ -184,10 +205,33 @@ export default function TradePage() {
               {x}
             </button>
           ))}
+          <span className="mx-1 border-l border-term-border" />
+          {(["price", "mcap"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMetric(m)}
+              disabled={m === "mcap" && detail.totalSupply == null}
+              className={`rounded px-3 py-1 text-xs disabled:opacity-40 ${metric === m ? "bg-term-accent text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
+            >
+              {m === "price" ? "Price" : "MCap"}
+            </button>
+          ))}
+          <button
+            onClick={() => setDenom(denom === "usd" ? "eth" : "usd")}
+            className="ml-auto rounded border border-term-border px-3 py-1 text-xs text-term-dim hover:text-term-text"
+          >
+            {denom.toUpperCase()}
+          </button>
         </div>
         <div className="rounded border border-term-border">
           {candles.length ? (
-            <CandleChart candles={candles} ethUsd={ethUsd || 1} />
+            <CandleChart
+              candles={candles}
+              multiplier={
+                (denom === "eth" ? 1 : ethUsd || 1) *
+                (metric === "mcap" ? detail.totalSupply ?? 1 : 1)
+              }
+            />
           ) : (
             <div className="flex h-[420px] items-center justify-center text-term-dim">No candle data yet</div>
           )}
@@ -213,10 +257,19 @@ export default function TradePage() {
 
           {side === "buy" ? (
             <label className="mb-3 block text-sm">
-              <span className="text-term-dim">Amount (USD)</span>
+              <span className="flex items-center justify-between text-term-dim">
+                Amount ({denom === "eth" ? "ETH" : "USD"})
+                <button
+                  type="button"
+                  onClick={() => setDenom(denom === "usd" ? "eth" : "usd")}
+                  className="rounded border border-term-border px-2 py-0.5 text-[10px] hover:text-term-text"
+                >
+                  switch to {denom === "usd" ? "ETH" : "USD"}
+                </button>
+              </span>
               <input
-                value={amountUsd}
-                onChange={(e) => setAmountUsd(e.target.value)}
+                value={amountBuy}
+                onChange={(e) => setAmountBuy(e.target.value)}
                 inputMode="decimal"
                 className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-2 outline-none focus:border-term-accent"
               />
@@ -243,12 +296,16 @@ export default function TradePage() {
                 <span className="num">
                   {side === "buy"
                     ? `${fmtCompact(quoteOutDec)} ${detail.symbol}`
-                    : `$${fmtUsd(quoteOutDec * ethUsd, 2)}`}
+                    : denom === "eth"
+                      ? `${fmtEth(quoteOutDec)} ETH`
+                      : `$${fmtUsd(quoteOutDec * ethUsd, 2)}`}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-term-dim">Exec price</span>
-                <span className="num">${fmtUsd(quote.execPrice * ethUsd)}</span>
+                <span className="num">
+                  {denom === "eth" ? `${fmtEth(quote.execPrice)} ETH` : `$${fmtUsd(quote.execPrice * ethUsd)}`}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-term-dim">Price impact</span>
