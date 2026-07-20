@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, TokenRow, fmtUsd, fmtCompact } from "@/lib/api";
+import { api, TokenRow, fmtUsd, fmtCompact, fmtMcap } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
-import { useDenom, fmtEth } from "@/lib/denom";
+import { useDenom } from "@/lib/denom";
 
-type SortKey = "symbol" | "priceUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd";
+type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd";
 
 // Pools below this 24h volume are hidden by default (dead flatline charts).
 const MIN_ACTIVE_VOL = 100;
@@ -41,7 +41,9 @@ export default function Screener() {
     let list = tokens.map((t) => {
       const lp = live[t.address.toLowerCase()];
       if (!lp || lp.price == null) return t;
-      return { ...t, priceQuote: lp.price, priceUsd: ethUsd != null ? lp.price * ethUsd : t.priceUsd };
+      const priceUsd = ethUsd != null ? lp.price * ethUsd : t.priceUsd;
+      const mcapUsd = priceUsd != null && t.totalSupply != null ? priceUsd * t.totalSupply : t.mcapUsd;
+      return { ...t, priceQuote: lp.price, priceUsd, mcapUsd };
     });
     if (hideInactive) {
       list = list.filter((t) => (t.volume24hUsd ?? 0) >= MIN_ACTIVE_VOL);
@@ -55,8 +57,8 @@ export default function Screener() {
       );
     }
     list.sort((a, b) => {
-      const av = a[sortKey];
-      const bv = b[sortKey];
+      const av = a[sortKey] ?? (typeof a[sortKey] === "string" ? "" : -Infinity);
+      const bv = b[sortKey] ?? (typeof b[sortKey] === "string" ? "" : -Infinity);
       const cmp = typeof av === "string" ? (av as string).localeCompare(bv as string) : (av as number) - (bv as number);
       return sortDesc ? -cmp : cmp;
     });
@@ -113,7 +115,7 @@ export default function Screener() {
           <thead className="bg-term-panel">
             <tr>
               {th("symbol", "Token", false)}
-              {th("priceUsd", "Price")}
+              {th("mcapUsd", "MCap")}
               {th("change24hPct", "24h")}
               {th("liquidityUsd", "Liquidity")}
               {th("volume24hUsd", "Volume 24h")}
@@ -135,9 +137,9 @@ export default function Screener() {
                 </td>
                 <td className="num px-3 py-2 text-right">
                   {denom === "usd"
-                    ? `$${fmtUsd(t.priceUsd)}`
-                    : t.priceQuote != null
-                      ? `${fmtEth(t.priceQuote)} ETH`
+                    ? fmtMcap(t.mcapUsd)
+                    : t.mcapUsd != null && ethUsd > 0
+                      ? `${fmtCompact(t.mcapUsd / ethUsd)} ETH`
                       : "-"}
                 </td>
                 <td
