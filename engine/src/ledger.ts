@@ -67,11 +67,19 @@ export function getSeasonId(db: DatabaseSync, tsSec: number = Math.floor(Date.no
 
 // ---------- users ----------
 
-export function getOrCreateUser(db: DatabaseSync, discordId: string): number {
-  const row = db.prepare("SELECT id FROM users WHERE discord_id = ?").get(discordId) as { id: number } | undefined;
+// Users are keyed by lowercase wallet address.
+export function getOrCreateUser(db: DatabaseSync, address: string): number {
+  const addr = address.toLowerCase();
+  const row = db.prepare("SELECT id FROM users WHERE address = ?").get(addr) as { id: number } | undefined;
   if (row) return row.id;
-  db.prepare("INSERT INTO users (discord_id, created_at) VALUES (?, ?)").run(discordId, Math.floor(Date.now() / 1000));
-  return (db.prepare("SELECT id FROM users WHERE discord_id = ?").get(discordId) as { id: number }).id;
+  db.prepare("INSERT INTO users (address, created_at) VALUES (?, ?)").run(addr, Math.floor(Date.now() / 1000));
+  return (db.prepare("SELECT id FROM users WHERE address = ?").get(addr) as { id: number }).id;
+}
+
+// Display identity: 0x1234...abcd
+export function truncateAddress(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 // ---------- trades / positions ----------

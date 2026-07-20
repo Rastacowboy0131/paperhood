@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS tokens (
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  discord_id TEXT UNIQUE NOT NULL,
+  address TEXT UNIQUE NOT NULL,       -- lowercase 0x wallet address
   created_at INTEGER NOT NULL
 );
 
@@ -58,6 +58,20 @@ CREATE TABLE IF NOT EXISTS trades (
 CREATE INDEX IF NOT EXISTS idx_trades_user_season ON trades(user_id, season_id);
 CREATE INDEX IF NOT EXISTS idx_trades_ts ON trades(ts);
 `);
+
+  // Migration: users were previously keyed by discord_id (test data only).
+  // Drop and recreate with wallet address as the key.
+  if (hasColumn(db, "users", "discord_id")) {
+    db.exec(`
+DROP TABLE users;
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  address TEXT UNIQUE NOT NULL,
+  created_at INTEGER NOT NULL
+);
+DELETE FROM trades;
+`);
+  }
 
   // Pools table exists from the indexer; the engine needs fee tier and token0
   // orientation, cached lazily on first quote.

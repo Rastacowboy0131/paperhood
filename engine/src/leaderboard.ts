@@ -1,19 +1,20 @@
 import { DatabaseSync } from "node:sqlite";
-import { getSeasonId, realizedPnl, STARTING_BALANCE_USD } from "./ledger.js";
+import { getSeasonId, realizedPnl, truncateAddress, STARTING_BALANCE_USD } from "./ledger.js";
 
 export interface LeaderboardEntry {
   userId: number;
-  discordId: string;
+  address: string;
+  display: string; // truncated address, e.g. 0x1234...abcd
   realizedPnlUsd: number;
   pnlPct: number; // realized PnL as % of starting balance
   trades: number;
 }
 
-function usersInSeason(db: DatabaseSync, seasonId: number): { id: number; discord_id: string }[] {
+function usersInSeason(db: DatabaseSync, seasonId: number): { id: number; address: string }[] {
   return db.prepare(
-    `SELECT u.id, u.discord_id FROM users u
+    `SELECT u.id, u.address FROM users u
      WHERE EXISTS (SELECT 1 FROM trades t WHERE t.user_id = u.id AND t.season_id = ?)`
-  ).all(seasonId) as { id: number; discord_id: string }[];
+  ).all(seasonId) as { id: number; address: string }[];
 }
 
 function rank(db: DatabaseSync, seasonId: number, sinceTs: number): LeaderboardEntry[] {
@@ -26,7 +27,8 @@ function rank(db: DatabaseSync, seasonId: number, sinceTs: number): LeaderboardE
     if (trades === 0) continue;
     entries.push({
       userId: u.id,
-      discordId: u.discord_id,
+      address: u.address,
+      display: truncateAddress(u.address),
       realizedPnlUsd: pnl,
       pnlPct: (pnl / STARTING_BALANCE_USD) * 100,
       trades,

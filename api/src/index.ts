@@ -195,7 +195,7 @@ export async function buildServer(opts: BuildOpts = {}) {
        FROM trades WHERE user_id = ? AND season_id = ? ORDER BY id DESC LIMIT 200`
     ).all(user.userId, seasonId);
     return {
-      user: { discordId: user.discordId, username: user.username },
+      user: { address: user.address, display: user.address.slice(0, 6) + "..." + user.address.slice(-4) },
       cashUsd: p.cashUsd,
       cashEth: p.cashEth,
       equityUsd: p.equityUsd,

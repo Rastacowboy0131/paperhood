@@ -46,7 +46,7 @@ CREATE TABLE snapshots (
 
 test("user starts with 10k and buys reduce cash", async () => {
   const db = fakeDb();
-  const uid = getOrCreateUser(db, "discord-1");
+  const uid = getOrCreateUser(db, "0x0000000000000000000000000000000000000001");
   const season = getSeasonId(db);
   assert.equal(cashBalanceUsd(db, uid, season), STARTING_BALANCE_USD);
 
@@ -58,14 +58,14 @@ test("user starts with 10k and buys reduce cash", async () => {
 
 test("cannot overspend or oversell", async () => {
   const db = fakeDb();
-  const uid = getOrCreateUser(db, "discord-2");
+  const uid = getOrCreateUser(db, "0x0000000000000000000000000000000000000002");
   await assert.rejects(() => buy(db, uid, PAIR, MEME, 10001), /insufficient balance/);
   await assert.rejects(() => sell(db, uid, PAIR, MEME, 1n), /insufficient position/);
 });
 
 test("sell realizes PnL with FIFO cost basis", async () => {
   const db = fakeDb();
-  const uid = getOrCreateUser(db, "discord-3");
+  const uid = getOrCreateUser(db, "0x0000000000000000000000000000000000000003");
   const season = getSeasonId(db);
   const b = await buy(db, uid, PAIR, MEME, 1000);
 
@@ -81,7 +81,7 @@ test("sell realizes PnL with FIFO cost basis", async () => {
 
 test("price moves create profit; FIFO uses oldest lots first", async () => {
   const db = fakeDb();
-  const uid = getOrCreateUser(db, "discord-4");
+  const uid = getOrCreateUser(db, "0x0000000000000000000000000000000000000004");
   const b1 = await buy(db, uid, PAIR, MEME, 1000);
 
   // Pump the pool: MEME price in WETH quadruples (reserves shift).
@@ -101,8 +101,8 @@ test("price moves create profit; FIFO uses oldest lots first", async () => {
 
 test("leaderboards rank by realized PnL pct", async () => {
   const db = fakeDb();
-  const winner = getOrCreateUser(db, "winner");
-  const loser = getOrCreateUser(db, "loser");
+  const winner = getOrCreateUser(db, "0x1111111111111111111111111111111111111111");
+  const loser = getOrCreateUser(db, "0x2222222222222222222222222222222222222222");
 
   // Loser: round trip at flat price = small loss.
   const lb = await buy(db, loser, PAIR, MEME, 1000);
@@ -116,11 +116,11 @@ test("leaderboards rank by realized PnL pct", async () => {
 
   const weekly = weeklyLeaderboard(db);
   assert.equal(weekly.length, 2);
-  assert.equal(weekly[0].discordId, "winner");
+  assert.equal(weekly[0].address, "0x1111111111111111111111111111111111111111");
   assert.ok(weekly[0].pnlPct > 0 && weekly[1].pnlPct < 0);
 
   const daily = dailyLeaderboard(db);
-  assert.equal(daily[0].discordId, "winner");
+  assert.equal(daily[0].address, "0x1111111111111111111111111111111111111111");
 });
 
 test("season boundaries are Mondays 00:00 UTC", () => {

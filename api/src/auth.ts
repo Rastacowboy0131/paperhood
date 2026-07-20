@@ -1,12 +1,18 @@
-// Minimal signed-token session auth: HS256 JWT, httpOnly cookie.
-// Discord OAuth2 code flow issues the token; DEV_AUTH=1 gives a fake login.
+// Sign-In with Ethereum (EIP-4361) session auth: HS256 JWT, httpOnly cookie.
+// Flow: GET /auth/nonce -> frontend builds a SIWE message, wallet signs it ->
+// POST /auth/verify checks the message + signature and issues the cookie.
+// DEV_AUTH=1 keeps a fake wallet login for local dev.
 import crypto from "node:crypto";
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { DatabaseSync } from "node:sqlite";
+import { parseSiweMessage, validateSiweMessage } from "viem/siwe";
+import { recoverMessageAddress } from "viem";
 import { getOrCreateUser } from "../../engine/src/ledger.js";
 
 const COOKIE = "ph_session";
 const SESSION_TTL_S = 7 * 86400;
+const NONCE_TTL_S = 5 * 60;
+export const ALLOWED_CHAIN_IDS = [1, 4663]; // mainnet, Robinhood chain
 
 function b64url(buf: Buffer | string): string {
   return Buffer.from(buf).toString("base64url");
@@ -37,8 +43,7 @@ export function verifyJwt(token: string, secret: string): Record<string, unknown
 
 export interface SessionUser {
   userId: number;
-  discordId: string;
-  username: string;
+  address: string; // lowercase 0x wallet address
 }
 
 export function getSession(req: FastifyRequest, secret: string): SessionUser | null {
@@ -46,7 +51,7 @@ export function getSession(req: FastifyRequest, secret: string): SessionUser | n
   if (!token) return null;
   const p = verifyJwt(token, secret);
   if (!p || typeof p.userId !== "number") return null;
-  return { userId: p.userId as number, discordId: String(p.discordId ?? ""), username: String(p.username ?? "") };
+  return { userId: p.userId as number, address: String(p.address ?? "") };
 }
 
 export function requireAuth(secret: string) {
@@ -70,78 +75,112 @@ function setSessionCookie(reply: FastifyReply, token: string): void {
   });
 }
 
-function issueSession(reply: FastifyReply, db: DatabaseSync, secret: string, discordId: string, username: string): SessionUser {
-  const userId = getOrCreateUser(db, discordId);
+function issueSession(reply: FastifyReply, db: DatabaseSync, secret: string, address: string): SessionUser {
+  const addr = address.toLowerCase();
+  const userId = getOrCreateUser(db, addr);
   const token = signJwt(
-    { userId, discordId, username, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_S },
+    { userId, address: addr, exp: Math.floor(Date.now() / 1000) + SESSION_TTL_S },
     secret,
   );
   setSessionCookie(reply, token);
-  return { userId, discordId, username };
+  return { userId, address: addr };
 }
 
-export function registerAuthRoutes(app: FastifyInstance, db: DatabaseSync, secret: string): void {
-  const clientId = process.env.DISCORD_CLIENT_ID;
-  const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const baseUrl = process.env.BASE_URL || "http://localhost:8787";
-  const redirectUri = `${baseUrl}/auth/discord/callback`;
+// ---------- nonce storage ----------
 
-  // Dev login: DEV_AUTH=1 lets you log in as a fake user without Discord creds.
+function ensureNonceTable(db: DatabaseSync): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS auth_nonces (
+    nonce TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL
+  )`);
+}
+
+function issueNonce(db: DatabaseSync): string {
+  ensureNonceTable(db);
+  // 96 bits of randomness, alphanumeric (EIP-4361 requires >= 8 alphanumeric chars).
+  const nonce = crypto.randomBytes(12).toString("hex");
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare("DELETE FROM auth_nonces WHERE expires_at < ?").run(now);
+  db.prepare("INSERT INTO auth_nonces (nonce, expires_at) VALUES (?, ?)").run(nonce, now + NONCE_TTL_S);
+  return nonce;
+}
+
+// Returns true and consumes the nonce if it exists and has not expired.
+function consumeNonce(db: DatabaseSync, nonce: string): boolean {
+  ensureNonceTable(db);
+  const now = Math.floor(Date.now() / 1000);
+  const row = db.prepare("SELECT expires_at FROM auth_nonces WHERE nonce = ?").get(nonce) as { expires_at: number } | undefined;
+  if (!row) return false;
+  db.prepare("DELETE FROM auth_nonces WHERE nonce = ?").run(nonce);
+  return row.expires_at >= now;
+}
+
+// ---------- routes ----------
+
+export function registerAuthRoutes(app: FastifyInstance, db: DatabaseSync, secret: string): void {
+  const expectedDomain = process.env.SIWE_DOMAIN || null; // e.g. "app.paperhood.xyz"; unset = accept the message's own domain
+
+  // Dev login: DEV_AUTH=1 lets you log in as a fake wallet without signing anything.
   if (process.env.DEV_AUTH === "1") {
     app.get("/auth/dev", async (req, reply) => {
-      const q = req.query as { discordId?: string; username?: string };
-      const discordId = q.discordId || "dev-user-1";
-      const username = q.username || "DevUser";
-      const user = issueSession(reply, db, secret, discordId, username);
+      const q = req.query as { address?: string };
+      const address = (q.address || "0x000000000000000000000000000000000000dEaD").toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(address)) return reply.code(400).send({ error: "invalid address" });
+      const user = issueSession(reply, db, secret, address);
       return { ok: true, user };
     });
   }
 
-  app.get("/auth/discord", async (_req, reply) => {
-    if (!clientId) return reply.code(500).send({ error: "DISCORD_CLIENT_ID not configured" });
-    const url = new URL("https://discord.com/oauth2/authorize");
-    url.searchParams.set("client_id", clientId);
-    url.searchParams.set("redirect_uri", redirectUri);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("scope", "identify");
-    return reply.redirect(url.toString());
+  app.get("/auth/nonce", async () => {
+    return { nonce: issueNonce(db), expiresInS: NONCE_TTL_S };
   });
 
-  app.get("/auth/discord/callback", async (req, reply) => {
-    if (!clientId || !clientSecret) return reply.code(500).send({ error: "Discord OAuth not configured" });
-    const code = (req.query as { code?: string }).code;
-    if (!code) return reply.code(400).send({ error: "missing code" });
+  app.post("/auth/verify", async (req, reply) => {
+    const body = req.body as { message?: string; signature?: string };
+    if (!body?.message || !body?.signature) {
+      return reply.code(400).send({ error: "message and signature required" });
+    }
 
-    const tokenRes = await fetch("https://discord.com/api/oauth2/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: redirectUri,
-      }),
+    const fields = parseSiweMessage(body.message);
+    if (!fields.address || !fields.nonce || !fields.chainId || !fields.domain) {
+      return reply.code(400).send({ error: "invalid SIWE message" });
+    }
+    if (!ALLOWED_CHAIN_IDS.includes(fields.chainId)) {
+      return reply.code(400).send({ error: `chainId must be one of ${ALLOWED_CHAIN_IDS.join(", ")}` });
+    }
+    // Checks address format, domain (when configured), notBefore/expirationTime windows.
+    const valid = validateSiweMessage({
+      message: fields,
+      ...(expectedDomain ? { domain: expectedDomain } : {}),
     });
-    if (!tokenRes.ok) return reply.code(502).send({ error: "token exchange failed" });
-    const tok = (await tokenRes.json()) as { access_token: string };
+    if (!valid) return reply.code(401).send({ error: "SIWE message failed validation (domain or time window)" });
 
-    const meRes = await fetch("https://discord.com/api/users/@me", {
-      headers: { Authorization: `Bearer ${tok.access_token}` },
-    });
-    if (!meRes.ok) return reply.code(502).send({ error: "failed to fetch discord user" });
-    const me = (await meRes.json()) as { id: string; username: string };
+    if (!consumeNonce(db, fields.nonce)) {
+      return reply.code(401).send({ error: "unknown or expired nonce" });
+    }
 
-    issueSession(reply, db, secret, me.id, me.username);
-    const webOrigin = process.env.WEB_ORIGIN;
-    if (webOrigin) return reply.redirect(webOrigin);
-    return { ok: true, user: { discordId: me.id, username: me.username } };
+    let recovered: string;
+    try {
+      recovered = await recoverMessageAddress({
+        message: body.message,
+        signature: body.signature as `0x${string}`,
+      });
+    } catch {
+      return reply.code(401).send({ error: "invalid signature" });
+    }
+    if (recovered.toLowerCase() !== fields.address.toLowerCase()) {
+      return reply.code(401).send({ error: "signature does not match address" });
+    }
+
+    const user = issueSession(reply, db, secret, fields.address);
+    return { ok: true, user };
   });
 
   app.get("/auth/me", async (req, reply) => {
     const session = getSession(req, secret);
     if (!session) return reply.code(401).send({ error: "not authenticated" });
-    return { user: session };
+    const row = db.prepare("SELECT created_at FROM users WHERE id = ?").get(session.userId) as { created_at: number } | undefined;
+    return { user: { ...session, createdAt: row?.created_at ?? null } };
   });
 
   app.post("/auth/logout", async (_req, reply) => {

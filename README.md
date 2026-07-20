@@ -9,7 +9,7 @@ Trade tokenized stocks and top-liquidity dex tokens with a simulated AMM engine 
 - `indexer/` — pool discovery + reserve/tick polling from RH chain (QuickNode RPC)
 - `engine/` — simulated AMM fills (uni v2 constant product; v3/v4 tick math), portfolio ledger
 - `api/` — REST/WebSocket API serving the web terminal
-- `web/` — Next.js terminal (screener, trade panel, portfolio, leaderboard), Discord OAuth
+- `web/` — Next.js terminal (screener, trade panel, portfolio, leaderboard), Sign-In with Ethereum (SIWE)
 - `docs/` — blueprint and design docs
 
 ## Status

@@ -20,24 +20,59 @@ Run alongside the indexer: the indexer must be running (or have recently run) so
 | --- | --- | --- | --- |
 | `RH_RPC_HTTP` | yes | | QuickNode RPC, loaded from `../../.env.local`, never committed |
 | `JWT_SECRET` | prod yes | dev fallback under DEV_AUTH | signs session JWTs |
-| `DEV_AUTH` | no | | `1` enables `GET /auth/dev` fake login |
-| `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` | for real auth | | Discord OAuth2 app creds |
-| `BASE_URL` | for real auth | `http://localhost:8787` | public URL of this API; callback is `BASE_URL/auth/discord/callback` |
-| `WEB_ORIGIN` | no | allow all | comma-separated CORS origins; OAuth callback redirects here on success |
+| `DEV_AUTH` | no | | `1` enables `GET /auth/dev` fake wallet login |
+| `SIWE_DOMAIN` | recommended in prod | accept message's own domain | pins the `domain` field of SIWE messages, e.g. `app.paperhood.xyz` |
+| `WEB_ORIGIN` | no | allow all | comma-separated CORS origins |
 | `PORT` / `HOST` | no | 8787 / 0.0.0.0 | |
 | `WS_PUSH_INTERVAL_MS` | no | 5000 | ws push cadence |
 
 ## Auth
 
-Discord OAuth2 code flow:
+Sign-In with Ethereum (SIWE, EIP-4361). Users authenticate with their wallet; sessions are httpOnly `ph_session` cookies (HS256 JWT, 7 day expiry, SameSite=Lax, Secure in production). Rewards are later paid to the signed-in address.
 
-1. Frontend sends the user to `GET /auth/discord` (redirects to Discord).
-2. Discord redirects to `GET /auth/discord/callback?code=...`; the API exchanges the code, fetches the user's Discord id/username, creates/finds the user, and sets an httpOnly `ph_session` cookie (HS256 JWT, 7 day expiry, SameSite=Lax, Secure in production).
-3. Callback redirects to `WEB_ORIGIN` if set. All authed requests just need `credentials: "include"` on fetch; no token handling in JS.
+Flow:
 
-Other auth routes: `GET /auth/me` (current session), `POST /auth/logout`, and in dev mode `GET /auth/dev?discordId=...&username=...`.
+1. `GET /auth/nonce` -> `{"nonce":"a1b2c3...","expiresInS":300}`. Nonces are single use and expire after 5 minutes.
+2. Frontend builds an EIP-4361 message and has the wallet sign it (`personal_sign`). Required fields:
+   - `domain`: the site the user is on, e.g. `app.paperhood.xyz` (checked against `SIWE_DOMAIN` when set)
+   - `address`: the wallet address (EIP-55 checksummed)
+   - `uri`: the origin URL, e.g. `https://app.paperhood.xyz`
+   - `version`: `"1"`
+   - `chainId`: `4663` (Robinhood chain) or `1` (mainnet); anything else is rejected
+   - `nonce`: the value from step 1
+   - `issuedAt` (auto with most SIWE libs); optional `expirationTime`/`notBefore` are honored
 
-Discord app setup: add `BASE_URL/auth/discord/callback` to the app's OAuth2 redirect URIs; only the `identify` scope is used.
+   With viem: `createSiweMessage({ address, chainId: 4663, domain, nonce, uri, version: "1" })` then `walletClient.signMessage({ message })`.
+3. `POST /auth/verify` with `{"message":"<full SIWE message string>","signature":"0x..."}`. On success the API creates/finds the user by lowercase address and sets the session cookie. Response: `{"ok":true,"user":{"userId":1,"address":"0x..."}}`.
+4. All authed requests just need `credentials: "include"` on fetch; no token handling in JS.
+
+Other auth routes: `GET /auth/me` (current session: `{user:{userId,address,createdAt}}` or 401), `POST /auth/logout` (clears cookie), and in dev mode `GET /auth/dev?address=0x...` (fake wallet login, no signature).
+
+Sample exchange with a throwaway key (see also the SIWE tests in `test/api.test.ts`):
+
+```bash
+# 1. nonce
+curl -s http://localhost:8787/auth/nonce
+# {"nonce":"3f9c0a1d2b4e5f6a7b8c9d0e","expiresInS":300}
+
+# 2. sign locally (throwaway key) with viem
+node --input-type=module -e '
+import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
+import { createSiweMessage } from "viem/siwe";
+const account = privateKeyToAccount(generatePrivateKey());
+const message = createSiweMessage({ address: account.address, chainId: 4663, domain: "localhost:8787", nonce: "3f9c0a1d2b4e5f6a7b8c9d0e", uri: "http://localhost:8787", version: "1" });
+const signature = await account.signMessage({ message });
+console.log(JSON.stringify({ message, signature }));
+'
+
+# 3. verify (paste the JSON from step 2 as the body), keep the cookie
+curl -s -c /tmp/ph.jar -H "Content-Type: application/json" -d @body.json http://localhost:8787/auth/verify
+# {"ok":true,"user":{"userId":1,"address":"0x..."}}
+
+# 4. authed requests
+curl -s -b /tmp/ph.jar http://localhost:8787/auth/me
+curl -s -b /tmp/ph.jar http://localhost:8787/portfolio
+```
 
 ## Endpoints
 
@@ -89,7 +124,7 @@ Body: `{"token":"0x..","side":"buy"|"sell","amount":...}`. Buy: `amount` is USD 
 Cash + equity in USD and ETH, positions marked at exit (quote selling the full position now), realized/unrealized PnL, and up to 200 recent trades this season.
 
 ```json
-{"user":{"discordId":"smoke2","username":"Smoke2"},"cashUsd":9000,"cashEth":4.8169,"equityUsd":9979.55,"equityEth":5.3412,"realizedPnlUsd":0,"unrealizedPnlUsd":-20.44,"positions":[{"token":"0x020b...18b4","symbol":"CASHCAT","pair":"0xA70f...E313","qty":"14246160340860588862819","qtyDec":14246.16,"costBasisUsd":1000,"markUsd":979.55,"unrealizedPnlUsd":-20.44}],"history":[...]}
+{"user":{"address":"0xaaaa...aaaa","display":"0xaaaa...aaaa"},"cashUsd":9000,"cashEth":4.8169,"equityUsd":9979.55,"equityEth":5.3412,"realizedPnlUsd":0,"unrealizedPnlUsd":-20.44,"positions":[{"token":"0x020b...18b4","symbol":"CASHCAT","pair":"0xA70f...E313","qty":"14246160340860588862819","qtyDec":14246.16,"costBasisUsd":1000,"markUsd":979.55,"unrealizedPnlUsd":-20.44}],"history":[...]}
 ```
 
 ### GET /leaderboard?period=daily|weekly
@@ -97,7 +132,7 @@ Cash + equity in USD and ETH, positions marked at exit (quote selling the full p
 Realized PnL only (locked decision). Weekly is per-season (fresh 10k every Monday 00:00 UTC); daily counts sells closed since 00:00 UTC.
 
 ```json
-{"period":"weekly","entries":[{"userId":2,"discordId":"smoke2","realizedPnlUsd":-20.44,"pnlPct":-0.204,"trades":2}]}
+{"period":"weekly","entries":[{"userId":2,"address":"0x1111111111111111111111111111111111111111","display":"0x1111...1111","realizedPnlUsd":-20.44,"pnlPct":-0.204,"trades":2}]}
 ```
 
 ### GET /health

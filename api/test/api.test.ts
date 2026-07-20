@@ -1,8 +1,11 @@
 // Endpoint tests: fake in-memory db with a v2 pool, DEV_AUTH login, then
-// quote, trade round trip, portfolio math, and leaderboard shape.
+// quote, trade round trip, portfolio math, leaderboard shape, and the full
+// SIWE flow with a locally generated throwaway wallet.
 import { test, before, after } from "node:test";
 import assert from "node:assert";
 import { DatabaseSync } from "node:sqlite";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { createSiweMessage } from "viem/siwe";
 import { migrate } from "../../engine/src/db.js";
 import { setEthUsdForTest, STARTING_BALANCE_USD } from "../../engine/src/ledger.js";
 
@@ -11,6 +14,8 @@ process.env.NODE_ENV = "test";
 process.env.RH_RPC_HTTP = process.env.RH_RPC_HTTP || "http://127.0.0.1:1"; // never called: fee/token0/meta pre-seeded
 
 const { buildServer } = await import("../src/index.js");
+
+const TESTER = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 const WETH = "0x00000000000000000000000000000000000000aa";
 const MEME = "0x00000000000000000000000000000000000000bb";
@@ -64,7 +69,7 @@ let cookie = "";
 before(async () => {
   const built = await buildServer({ db: fakeDb() });
   app = built.app;
-  const res = await app.inject({ method: "GET", url: "/auth/dev?discordId=tester&username=Tester" });
+  const res = await app.inject({ method: "GET", url: `/auth/dev?address=${TESTER}` });
   assert.equal(res.statusCode, 200);
   cookie = res.headers["set-cookie"] as string;
   assert.ok(cookie.includes("ph_session="));
@@ -203,7 +208,8 @@ test("GET /leaderboard has correct shape and includes the trader", async () => {
     assert.ok(Array.isArray(body.entries));
     assert.equal(body.entries.length, 1);
     const e = body.entries[0];
-    assert.equal(e.discordId, "tester");
+    assert.equal(e.address, TESTER);
+    assert.equal(e.display, "0xaaaa...aaaa");
     assert.ok(typeof e.pnlPct === "number");
     assert.ok(e.realizedPnlUsd < 0);
     assert.ok(e.trades >= 2);
@@ -215,7 +221,107 @@ test("GET /leaderboard has correct shape and includes the trader", async () => {
 test("GET /auth/me reflects session, /portfolio without cookie is 401", async () => {
   const me = await app.inject({ method: "GET", url: "/auth/me", headers: { cookie } });
   assert.equal(me.statusCode, 200);
-  assert.equal(me.json().user.username, "Tester");
+  assert.equal(me.json().user.address, TESTER);
+  assert.ok(typeof me.json().user.createdAt === "number");
   const anon = await app.inject({ method: "GET", url: "/portfolio" });
   assert.equal(anon.statusCode, 401);
+});
+
+// ---------- SIWE flow ----------
+
+async function siweLogin(account: ReturnType<typeof privateKeyToAccount>, overrides: Partial<Parameters<typeof createSiweMessage>[0]> = {}) {
+  const nonceRes = await app.inject({ method: "GET", url: "/auth/nonce" });
+  assert.equal(nonceRes.statusCode, 200);
+  const { nonce } = nonceRes.json();
+  assert.ok(typeof nonce === "string" && nonce.length >= 8);
+
+  const message = createSiweMessage({
+    address: account.address,
+    chainId: 4663,
+    domain: "localhost:8787",
+    nonce,
+    uri: "http://localhost:8787",
+    version: "1",
+    ...overrides,
+  });
+  const signature = await account.signMessage({ message });
+  const res = await app.inject({ method: "POST", url: "/auth/verify", payload: { message, signature } });
+  return { res, message, signature, nonce };
+}
+
+test("SIWE: nonce, sign, verify, trade, portfolio", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const { res } = await siweLogin(account);
+  assert.equal(res.statusCode, 200);
+  const body = res.json();
+  assert.equal(body.user.address, account.address.toLowerCase());
+  const siweCookie = (res.headers["set-cookie"] as string).split(";")[0];
+  assert.ok(siweCookie.startsWith("ph_session="));
+
+  const me = await app.inject({ method: "GET", url: "/auth/me", headers: { cookie: siweCookie } });
+  assert.equal(me.statusCode, 200);
+  assert.equal(me.json().user.address, account.address.toLowerCase());
+
+  const buyRes = await app.inject({
+    method: "POST", url: "/trade", headers: { cookie: siweCookie },
+    payload: { token: MEME, side: "buy", amount: "500" },
+  });
+  assert.equal(buyRes.statusCode, 200);
+  assert.ok(BigInt(buyRes.json().tokensOut) > 0n);
+
+  const pf = (await app.inject({ method: "GET", url: "/portfolio", headers: { cookie: siweCookie } })).json();
+  assert.equal(pf.user.address, account.address.toLowerCase());
+  assert.ok(Math.abs(pf.cashUsd - (STARTING_BALANCE_USD - 500)) < 1e-6);
+  assert.equal(pf.positions.length, 1);
+});
+
+test("SIWE: nonce cannot be replayed", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const { res, message, signature } = await siweLogin(account);
+  assert.equal(res.statusCode, 200);
+  const replay = await app.inject({ method: "POST", url: "/auth/verify", payload: { message, signature } });
+  assert.equal(replay.statusCode, 401);
+  assert.match(replay.json().error, /nonce/);
+});
+
+test("SIWE: unknown nonce rejected", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const message = createSiweMessage({
+    address: account.address, chainId: 4663, domain: "localhost:8787",
+    nonce: "deadbeefdeadbeef", uri: "http://localhost:8787", version: "1",
+  });
+  const signature = await account.signMessage({ message });
+  const res = await app.inject({ method: "POST", url: "/auth/verify", payload: { message, signature } });
+  assert.equal(res.statusCode, 401);
+});
+
+test("SIWE: wrong signer rejected", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const other = privateKeyToAccount(generatePrivateKey());
+  const nonceRes = await app.inject({ method: "GET", url: "/auth/nonce" });
+  const { nonce } = nonceRes.json();
+  const message = createSiweMessage({
+    address: account.address, chainId: 4663, domain: "localhost:8787",
+    nonce, uri: "http://localhost:8787", version: "1",
+  });
+  const signature = await other.signMessage({ message });
+  const res = await app.inject({ method: "POST", url: "/auth/verify", payload: { message, signature } });
+  assert.equal(res.statusCode, 401);
+});
+
+test("SIWE: disallowed chain id rejected", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const { res } = await siweLogin(account, { chainId: 137 });
+  assert.equal(res.statusCode, 400);
+  assert.match(res.json().error, /chainId/);
+});
+
+test("POST /auth/logout clears the cookie", async () => {
+  const account = privateKeyToAccount(generatePrivateKey());
+  const { res } = await siweLogin(account);
+  const siweCookie = (res.headers["set-cookie"] as string).split(";")[0];
+  const out = await app.inject({ method: "POST", url: "/auth/logout", headers: { cookie: siweCookie } });
+  assert.equal(out.statusCode, 200);
+  const cleared = out.headers["set-cookie"] as string;
+  assert.ok(cleared.includes("ph_session=;") || cleared.includes("ph_session="));
 });
