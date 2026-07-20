@@ -8,6 +8,9 @@ import { useDenom, fmtEth } from "@/lib/denom";
 
 type SortKey = "symbol" | "priceUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd";
 
+// Pools below this 24h volume are hidden by default (dead flatline charts).
+const MIN_ACTIVE_VOL = 100;
+
 export default function Screener() {
   const router = useRouter();
   const [tokens, setTokens] = useState<TokenRow[]>([]);
@@ -17,6 +20,8 @@ export default function Screener() {
   const [sortKey, setSortKey] = useState<SortKey>("liquidityUsd");
   const [sortDesc, setSortDesc] = useState(true);
   const [denom, setDenom] = useDenom();
+  // Hide dead pools (flatline charts) by default; toggle to see everything.
+  const [hideInactive, setHideInactive] = useState(true);
 
   useEffect(() => {
     api
@@ -38,6 +43,9 @@ export default function Screener() {
       if (!lp || lp.price == null) return t;
       return { ...t, priceQuote: lp.price, priceUsd: ethUsd != null ? lp.price * ethUsd : t.priceUsd };
     });
+    if (hideInactive) {
+      list = list.filter((t) => (t.volume24hUsd ?? 0) >= MIN_ACTIVE_VOL);
+    }
     if (q) {
       list = list.filter(
         (t) =>
@@ -53,7 +61,7 @@ export default function Screener() {
       return sortDesc ? -cmp : cmp;
     });
     return list;
-  }, [tokens, live, ethUsd, search, sortKey, sortDesc]);
+  }, [tokens, live, ethUsd, search, sortKey, sortDesc, hideInactive]);
 
   function th(key: SortKey, label: string, right = true) {
     return (
@@ -87,6 +95,13 @@ export default function Screener() {
           className="rounded border border-term-border px-3 py-1.5 text-sm text-term-dim hover:text-term-text"
         >
           Price: {denom.toUpperCase()}
+        </button>
+        <button
+          onClick={() => setHideInactive(!hideInactive)}
+          className={`rounded border border-term-border px-3 py-1.5 text-sm hover:text-term-text ${hideInactive ? "text-term-accent" : "text-term-dim"}`}
+          title={`Hide pools with under $${MIN_ACTIVE_VOL} 24h volume`}
+        >
+          {hideInactive ? "Active only" : "All pools"}
         </button>
         <span className="ml-auto text-xs text-term-dim">
           {rows.length} tokens · ETH ${fmtUsd(ethUsd, 2)}
