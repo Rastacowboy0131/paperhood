@@ -3,7 +3,7 @@
 // Shared WS price feed. One socket, token subscriptions ref-counted per hook user.
 
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "./api";
+import { API_ORIGIN } from "./api";
 
 type PriceUpdate = { token: string; pair: string; price: number; ts: number };
 type Listener = (u: PriceUpdate) => void;
@@ -14,7 +14,8 @@ const listeners = new Set<Listener>();
 const subCounts = new Map<string, number>();
 
 function wsUrl(): string {
-  return API_URL.replace(/^http/, "ws") + "/ws";
+  // WebSockets connect straight to the backend; Vercel rewrites do not proxy WS.
+  return API_ORIGIN.replace(/^http/, "ws") + "/ws";
 }
 
 function ensureSocket(): Promise<WebSocket> {

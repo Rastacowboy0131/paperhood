@@ -1,6 +1,11 @@
 // Small typed fetch wrapper for the PaperHood API. Cookie auth via credentials: include.
 
-export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
+// Direct backend origin (used for WebSockets, and as the proxy target).
+export const API_ORIGIN = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8787";
+// Browser HTTP calls go through the same-origin /api proxy (next.config rewrite)
+// so the session cookie is first-party. Safari drops third-party cookies, which
+// broke auth when the web (vercel.app) called the API (railway.app) directly.
+export const API_URL = "/api";
 export const DEV_AUTH = process.env.NEXT_PUBLIC_DEV_AUTH === "1";
 
 export interface TokenRow {
