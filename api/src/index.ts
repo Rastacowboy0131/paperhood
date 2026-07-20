@@ -92,7 +92,7 @@ export async function buildServer(opts: BuildOpts = {}) {
     const { address } = req.params as { address: string };
     const q = req.query as { tf?: string; limit?: string };
     const tf = q.tf || "1m";
-    if (!["1m", "5m", "1h"].includes(tf)) return reply.code(400).send({ error: "tf must be 1m, 5m, or 1h" });
+    if (!["1m", "5m", "1h", "1d"].includes(tf)) return reply.code(400).send({ error: "tf must be 1m, 5m, 1h, or 1d" });
     const limit = Math.min(Math.max(parseInt(q.limit || "300", 10) || 300, 1), 1000);
     const pool = poolForToken(db, address);
     if (!pool) return reply.code(404).send({ error: "token not in universe" });

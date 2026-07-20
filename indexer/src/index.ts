@@ -1,5 +1,6 @@
 import { runDiscovery } from "./discovery.js";
 import { pollOnce } from "./poller.js";
+import { runBackfill } from "./backfill.js";
 
 const POLL_MS = Number(process.env.POLL_INTERVAL_MS ?? 10_000);
 const DISCOVERY_MS = Number(process.env.DISCOVERY_INTERVAL_MS ?? 15 * 60_000);
@@ -44,6 +45,8 @@ process.on("SIGTERM", shutdown);
 
 console.log("paperhood indexer starting");
 await runDiscovery().catch((e) => console.warn("initial discovery failed:", e.message));
+// Historical backfill runs once in the background; slow by design (rate limited).
+void runBackfill().catch((e) => console.warn("backfill failed:", e.message));
 void discoveryLoop; // initial run done above; start the repeat loop below
 (async () => {
   await new Promise((r) => setTimeout(r, DISCOVERY_MS));

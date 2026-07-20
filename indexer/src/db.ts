@@ -17,11 +17,15 @@ db.exec("PRAGMA journal_mode = WAL");
 // v2: normalized prices (quote per tracked token, decimal adjusted) plus
 // token0/token1/decimals on pools. Old snapshots/candles held raw ratios,
 // so they are dropped on upgrade (data is short-lived by design).
-const SCHEMA_VERSION = 2;
+// v3: adds candles_hourly (backfilled hourly OHLC). Additive, so upgrading
+// from v2 keeps existing data; anything older still gets dropped.
+const SCHEMA_VERSION = 3;
 const row = db.prepare("PRAGMA user_version").get() as { user_version: number };
-if (row.user_version !== SCHEMA_VERSION) {
+if (row.user_version < 2) {
   console.log(`schema version ${row.user_version} -> ${SCHEMA_VERSION}: dropping indexer tables`);
   db.exec("DROP TABLE IF EXISTS pools; DROP TABLE IF EXISTS snapshots; DROP TABLE IF EXISTS candles;");
+}
+if (row.user_version !== SCHEMA_VERSION) {
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
@@ -66,5 +70,12 @@ CREATE TABLE IF NOT EXISTS candles (
   open REAL, high REAL, low REAL, close REAL,
   n INTEGER,
   PRIMARY KEY (pair_address, minute)
+);
+
+CREATE TABLE IF NOT EXISTS candles_hourly (
+  pair_address TEXT NOT NULL,
+  hour INTEGER NOT NULL,        -- unix seconds floored to hour
+  open REAL, high REAL, low REAL, close REAL,
+  PRIMARY KEY (pair_address, hour)
 );
 `);

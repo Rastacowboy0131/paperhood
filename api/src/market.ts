@@ -88,11 +88,66 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
 
 export interface Candle { t: number; o: number; h: number; l: number; c: number }
 
-const TF_SECONDS: Record<string, number> = { "1m": 60, "5m": 300, "1h": 3600 };
+const TF_SECONDS: Record<string, number> = { "1m": 60, "5m": 300, "1h": 3600, "1d": 86400 };
+
+function hourlyRows(db: DatabaseSync, pair: string, limit: number) {
+  try {
+    return db.prepare(`
+      SELECT hour, open, high, low, close FROM candles_hourly
+      WHERE pair_address = ? COLLATE NOCASE
+      ORDER BY hour DESC LIMIT ?
+    `).all(pair, limit) as { hour: number; open: number; high: number; low: number; close: number }[];
+  } catch {
+    return []; // table not created yet (indexer schema v2)
+  }
+}
+
+function aggregate(rows: Candle[], step: number): Candle[] {
+  const buckets = new Map<number, Candle>();
+  for (const r of rows) {
+    const t = r.t - (r.t % step);
+    const b = buckets.get(t);
+    if (!b) {
+      buckets.set(t, { t, o: r.o, h: r.h, l: r.l, c: r.c });
+    } else {
+      b.h = Math.max(b.h, r.h);
+      b.l = Math.min(b.l, r.l);
+      b.c = r.c;
+    }
+  }
+  return [...buckets.values()].sort((a, b) => a.t - b.t);
+}
 
 export function getCandles(db: DatabaseSync, pair: string, tf: string, limit: number): Candle[] {
   const step = TF_SECONDS[tf];
   if (!step) throw new Error(`unsupported timeframe ${tf}`);
+
+  // 1h and 1d are served from the hourly table (deep backfilled history),
+  // merged with buckets aggregated from live 1m candles which are fresher.
+  if (tf === "1h" || tf === "1d") {
+    const hourly = hourlyRows(db, pair, tf === "1h" ? limit : limit * 24)
+      .map((r) => ({ t: r.hour, o: r.open, h: r.high, l: r.low, c: r.close }));
+    hourly.reverse();
+    const live = db.prepare(`
+      SELECT minute, open, high, low, close FROM candles
+      WHERE pair_address = ? COLLATE NOCASE
+      ORDER BY minute DESC LIMIT ?
+    `).all(pair, tf === "1h" ? limit * 60 : limit * 1440) as
+      { minute: number; open: number; high: number; low: number; close: number }[];
+    live.reverse();
+    const liveHourly = aggregate(
+      live.map((r) => ({ t: r.minute, o: r.open, h: r.high, l: r.low, c: r.close })),
+      3600
+    );
+    // Merge: prefer backfilled hourly, fill gaps and the trailing edge from live.
+    const byHour = new Map<number, Candle>();
+    for (const c of liveHourly) byHour.set(c.t, c);
+    for (const c of hourly) byHour.set(c.t, c);
+    const merged = [...byHour.values()].sort((a, b) => a.t - b.t);
+    if (tf === "1h") return merged.slice(-limit);
+    return aggregate(merged, 86400).slice(-limit);
+  }
+
   const rows = db.prepare(`
     SELECT minute, open, high, low, close FROM candles
     WHERE pair_address = ? COLLATE NOCASE
@@ -105,19 +160,9 @@ export function getCandles(db: DatabaseSync, pair: string, tf: string, limit: nu
     return rows.map((r) => ({ t: r.minute, o: r.open, h: r.high, l: r.low, c: r.close }));
   }
 
-  // Aggregate 1m candles into the larger timeframe.
-  const buckets = new Map<number, Candle>();
-  for (const r of rows) {
-    const t = r.minute - (r.minute % step);
-    const b = buckets.get(t);
-    if (!b) {
-      buckets.set(t, { t, o: r.open, h: r.high, l: r.low, c: r.close });
-    } else {
-      b.h = Math.max(b.h, r.high);
-      b.l = Math.min(b.l, r.low);
-      b.c = r.close;
-    }
-  }
-  const agg = [...buckets.values()].sort((a, b) => a.t - b.t);
-  return agg.slice(-limit);
+  // Aggregate 1m candles into the larger timeframe (5m).
+  return aggregate(
+    rows.map((r) => ({ t: r.minute, o: r.open, h: r.high, l: r.low, c: r.close })),
+    step
+  ).slice(-limit);
 }

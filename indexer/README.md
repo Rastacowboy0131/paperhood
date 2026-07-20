@@ -19,7 +19,20 @@ Data lands in `indexer/data/paperhood.sqlite` (gitignored). Tables:
 
 - `pools`: tradeable universe (token, symbol, pair, dex, version, quote token, liquidity, vol24h, active flag)
 - `snapshots`: raw pool state, pruned to last 24h. v2 rows have reserve0/reserve1; v3 rows have sqrt_price_x96/tick/liquidity. `price` is a raw ratio (not decimal-adjusted); the sim engine should work from raw reserves/sqrtPrice.
-- `candles`: 1-minute OHLC built from snapshot prices, kept forever
+- `candles`: 1-minute OHLC built from snapshot prices (plus backfilled 1m history), kept forever
+- `candles_hourly`: hourly OHLC backfilled from GeckoTerminal, kept forever
+
+## Historical backfill (2026-07-20)
+
+On startup the indexer runs a one-shot backfill (`src/backfill.ts`) from the GeckoTerminal public API. Findings and behavior:
+
+- GeckoTerminal network slug for Robinhood Chain is `robinhood` (same as dexscreener). Endpoint: `https://api.geckoterminal.com/api/v2/networks/robinhood/pools/{pair}/ohlcv/{minute|hour}`. Free, no key.
+- Rate limit is ~30 req/min; requests are spaced 2.1s apart (~28/min), with a 65s sleep and one retry on 429. A full run over ~120 pools takes roughly 10-15 minutes and runs in the background without blocking polling.
+- Per pool: up to ~24h of minute candles into `candles` and up to 30 days (720) of hourly candles into `candles_hourly`. Pools that already have >= 100 candles in a table are skipped, and all inserts use `INSERT OR IGNORE` so live-polled candles are never overwritten. The chain launched recently, so actual history is shorter than the requested windows.
+- Orientation: we request `currency=token`, which returns quote-per-base prices matching our live candle convention (quote token, usually WETH, per tracked token). The response `meta.base.address` is checked; if GeckoTerminal's base is our quote token the prices are inverted (1/x, high/low swapped). Verified HOOD serves ~$100 USD through the API after WETH conversion.
+- Schema is `user_version` 3: v3 adds `candles_hourly` (additive; upgrading from v2 keeps data, older versions drop tables).
+
+The API's `/tokens/:address/candles` serves `1h` and `1d` from `candles_hourly` merged with buckets aggregated from live 1m candles (live data fills the trailing edge and any gaps; backfilled hourly wins on conflict).
 
 ## Implementation notes / findings (2026-07-20)
 

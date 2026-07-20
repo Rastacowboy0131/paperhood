@@ -39,6 +39,11 @@ CREATE TABLE candles (
   pair_address TEXT NOT NULL, minute INTEGER NOT NULL,
   open REAL, high REAL, low REAL, close REAL, n INTEGER,
   PRIMARY KEY (pair_address, minute)
+);
+CREATE TABLE candles_hourly (
+  pair_address TEXT NOT NULL, hour INTEGER NOT NULL,
+  open REAL, high REAL, low REAL, close REAL,
+  PRIMARY KEY (pair_address, hour)
 );`);
   migrate(db);
   db.prepare(
@@ -59,6 +64,14 @@ CREATE TABLE candles (
   const tok = db.prepare("INSERT INTO tokens (address, symbol, decimals, updated_at) VALUES (?,?,?,0)");
   tok.run(WETH, "WETH", 18);
   tok.run(MEME, "MEME", 18);
+  // Backfilled hourly candles: 72 hours of history.
+  const insH = db.prepare("INSERT INTO candles_hourly (pair_address, hour, open, high, low, close) VALUES (?,?,?,?,?,?)");
+  const hbase = now - (now % 3600);
+  for (let i = 72; i >= 1; i--) {
+    const h = hbase - i * 3600;
+    const p = 0.0001 + i * 1e-8;
+    insH.run(PAIR, h, p, p * 1.02, p * 0.98, p);
+  }
   setEthUsdForTest(db, ETH_USD);
   return db;
 }
@@ -120,6 +133,23 @@ test("GET /tokens/:address/candles aggregates timeframes", async () => {
 
   const bad = await app.inject({ method: "GET", url: `/tokens/${MEME}/candles?tf=2h` });
   assert.equal(bad.statusCode, 400);
+});
+
+test("GET /tokens/:address/candles serves 1h and 1d from hourly history", async () => {
+  const h1 = await app.inject({ method: "GET", url: `/tokens/${MEME}/candles?tf=1h&limit=100` });
+  assert.equal(h1.statusCode, 200);
+  const c1h = h1.json().candles;
+  // 72 backfilled hours plus live 1m aggregation should exceed the 2h of 1m data alone.
+  assert.ok(c1h.length >= 72, `expected >= 72 hourly candles, got ${c1h.length}`);
+  assert.equal(c1h[0].t % 3600, 0);
+  assert.ok(c1h[0].t < c1h[1].t);
+  assert.ok(c1h[0].h >= c1h[0].l);
+
+  const d1 = await app.inject({ method: "GET", url: `/tokens/${MEME}/candles?tf=1d&limit=10` });
+  assert.equal(d1.statusCode, 200);
+  const c1d = d1.json().candles;
+  assert.ok(c1d.length >= 3, `expected >= 3 daily candles, got ${c1d.length}`);
+  assert.equal(c1d[0].t % 86400, 0);
 });
 
 test("POST /quote returns amountOut, impact, fee", async () => {
