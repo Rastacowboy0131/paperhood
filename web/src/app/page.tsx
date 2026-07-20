@@ -112,8 +112,10 @@ export default function Screener() {
                 className="cursor-pointer border-t border-term-border hover:bg-term-panel"
               >
                 <td className="px-3 py-2">
-                  <span className="font-semibold">{t.symbol}</span>{" "}
-                  <span className="text-term-dim">{t.name}</span>
+                  <div className="max-w-[240px] truncate whitespace-nowrap">
+                    <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
+                    <span className="text-term-dim">{(t.name || "").slice(0, 40)}</span>
+                  </div>
                 </td>
                 <td className="num px-3 py-2 text-right">
                   {denom === "usd"
