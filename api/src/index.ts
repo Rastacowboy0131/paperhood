@@ -190,10 +190,22 @@ export async function buildServer(opts: BuildOpts = {}) {
     const seasonId = getSeasonId(db);
     const p = await getPortfolio(db, user.userId, seasonId);
     const history = db.prepare(
-      `SELECT id, pair_address AS pair, token_address AS token, side, amount_in AS amountIn,
-              amount_out AS amountOut, exec_price AS execPriceUsd, impact AS priceImpactPct, fee AS feeUsd, ts
-       FROM trades WHERE user_id = ? AND season_id = ? ORDER BY id DESC LIMIT 200`
+      `SELECT t.id, t.pair_address AS pair, t.token_address AS token,
+              COALESCE(tok.symbol, po.symbol, '?') AS symbol,
+              COALESCE(po.name, tok.symbol, '?') AS name,
+              t.side, t.amount_in AS amountIn, t.amount_out AS amountOut,
+              t.exec_price AS execPriceUsd, t.impact AS priceImpactPct, t.fee AS feeUsd,
+              t.realized_pnl AS realizedPnlUsd, t.ts
+       FROM trades t
+       LEFT JOIN tokens tok ON tok.address = t.token_address
+       LEFT JOIN pools po ON po.pair_address = t.pair_address
+       WHERE t.user_id = ? AND t.season_id = ? ORDER BY t.id DESC LIMIT 200`
     ).all(user.userId, seasonId);
+    const nameStmt = db.prepare(
+      "SELECT name FROM pools WHERE token_address = ? COLLATE NOCASE ORDER BY liquidity_usd DESC LIMIT 1"
+    );
+    const tokenName = (token: string, fallback: string) =>
+      (nameStmt.get(token) as { name: string | null } | undefined)?.name || fallback;
     return {
       user: { address: user.address, display: user.address.slice(0, 6) + "..." + user.address.slice(-4) },
       cashUsd: p.cashUsd,
@@ -203,7 +215,7 @@ export async function buildServer(opts: BuildOpts = {}) {
       realizedPnlUsd: p.realizedPnlUsd,
       unrealizedPnlUsd: p.positions.reduce((s, x) => s + x.unrealizedPnlUsd, 0),
       positions: p.positions.map((x) => ({
-        token: x.token, symbol: x.symbol, pair: x.pair,
+        token: x.token, symbol: x.symbol, name: tokenName(x.token, x.symbol), pair: x.pair,
         qty: x.qty.toString(), qtyDec: x.qtyDec,
         costBasisUsd: x.costBasisUsd, markUsd: x.markUsd, unrealizedPnlUsd: x.unrealizedPnlUsd,
       })),

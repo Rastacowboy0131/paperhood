@@ -5,7 +5,10 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 // Shared SQLite db written by the indexer. Engine adds its own tables.
-export const DEFAULT_DB_PATH = path.resolve(here, "../../indexer/data/paperhood.sqlite");
+// DATA_DIR overrides the location (used in deployment, points at a mounted volume).
+export const DEFAULT_DB_PATH = process.env.DATA_DIR
+  ? path.resolve(process.env.DATA_DIR, "paperhood.sqlite")
+  : path.resolve(here, "../../indexer/data/paperhood.sqlite");
 
 export function openDb(dbPath: string = DEFAULT_DB_PATH): DatabaseSync {
   const db = new DatabaseSync(dbPath);
@@ -77,4 +80,47 @@ DELETE FROM trades;
   // orientation, cached lazily on first quote.
   if (!hasColumn(db, "pools", "fee")) db.exec("ALTER TABLE pools ADD COLUMN fee INTEGER");
   if (!hasColumn(db, "pools", "token0")) db.exec("ALTER TABLE pools ADD COLUMN token0 TEXT");
+
+  // Per-trade realized PnL (sells only; USD). Added later, backfilled by
+  // replaying each user's season trades FIFO.
+  if (!hasColumn(db, "trades", "realized_pnl")) {
+    db.exec("ALTER TABLE trades ADD COLUMN realized_pnl REAL");
+    backfillRealizedPnl(db);
+  }
+}
+
+// Replay trades per user/season/token in order, pricing each sell against
+// FIFO buy lots, and store the per-sell realized PnL.
+function backfillRealizedPnl(db: DatabaseSync): void {
+  const groups = db.prepare(
+    "SELECT DISTINCT user_id, season_id, token_address FROM trades WHERE side = 'sell'"
+  ).all() as { user_id: number; season_id: number; token_address: string }[];
+
+  const upd = db.prepare("UPDATE trades SET realized_pnl = ? WHERE id = ?");
+  for (const g of groups) {
+    const decRow = db.prepare("SELECT decimals FROM tokens WHERE address = ?").get(g.token_address) as { decimals: number } | undefined;
+    const scale = 10 ** (decRow?.decimals ?? 18);
+    const rows = db.prepare(
+      "SELECT id, side, amount_in, amount_out, exec_price FROM trades WHERE user_id = ? AND season_id = ? AND token_address = ? ORDER BY id"
+    ).all(g.user_id, g.season_id, g.token_address) as { id: number; side: string; amount_in: string; amount_out: string; exec_price: number }[];
+
+    const lots: { qty: bigint; price: number }[] = [];
+    for (const t of rows) {
+      if (t.side === "buy") {
+        lots.push({ qty: BigInt(t.amount_out), price: t.exec_price });
+      } else {
+        let toConsume = BigInt(t.amount_in);
+        let cost = 0;
+        while (toConsume > 0n && lots.length > 0) {
+          const lot = lots[0];
+          const take = lot.qty < toConsume ? lot.qty : toConsume;
+          cost += (Number(take) / scale) * lot.price;
+          lot.qty -= take;
+          toConsume -= take;
+          if (lot.qty === 0n) lots.shift();
+        }
+        upd.run(Number(t.amount_out) - cost, t.id);
+      }
+    }
+  }
 }

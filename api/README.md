@@ -18,7 +18,8 @@ Run alongside the indexer: the indexer must be running (or have recently run) so
 
 | Var | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `RH_RPC_HTTP` | yes | | QuickNode RPC, loaded from `../../.env.local`, never committed |
+| `RH_RPC_HTTP` | yes | | QuickNode RPC, loaded from `../../.env.local` locally or set directly in prod, never committed |
+| `DATA_DIR` | prod yes | `../indexer/data` | directory holding `paperhood.sqlite`; point at a persistent volume in prod |
 | `JWT_SECRET` | prod yes | dev fallback under DEV_AUTH | signs session JWTs |
 | `DEV_AUTH` | no | | `1` enables `GET /auth/dev` fake wallet login |
 | `SIWE_DOMAIN` | recommended in prod | accept message's own domain | pins the `domain` field of SIWE messages, e.g. `app.paperhood.xyz` |
@@ -124,8 +125,10 @@ Body: `{"token":"0x..","side":"buy"|"sell","amount":...}`. Buy: `amount` is USD 
 Cash + equity in USD and ETH, positions marked at exit (quote selling the full position now), realized/unrealized PnL, and up to 200 recent trades this season.
 
 ```json
-{"user":{"address":"0xaaaa...aaaa","display":"0xaaaa...aaaa"},"cashUsd":9000,"cashEth":4.8169,"equityUsd":9979.55,"equityEth":5.3412,"realizedPnlUsd":0,"unrealizedPnlUsd":-20.44,"positions":[{"token":"0x020b...18b4","symbol":"CASHCAT","pair":"0xA70f...E313","qty":"14246160340860588862819","qtyDec":14246.16,"costBasisUsd":1000,"markUsd":979.55,"unrealizedPnlUsd":-20.44}],"history":[...]}
+{"user":{"address":"0xaaaa...aaaa","display":"0xaaaa...aaaa"},"cashUsd":9000,"cashEth":4.8169,"equityUsd":9979.55,"equityEth":5.3412,"realizedPnlUsd":0,"unrealizedPnlUsd":-20.44,"positions":[{"token":"0x020b...18b4","symbol":"CASHCAT","name":"CashCat","pair":"0xA70f...E313","qty":"14246160340860588862819","qtyDec":14246.16,"costBasisUsd":1000,"markUsd":979.55,"unrealizedPnlUsd":-20.44}],"history":[...]}
 ```
+
+Positions include `symbol` and `name`; history rows include `symbol`, `name`, and `realizedPnlUsd` (per-trade realized PnL on sells, `null` on buys), so the frontend needs no client-side joins.
 
 ### GET /leaderboard?period=daily|weekly
 

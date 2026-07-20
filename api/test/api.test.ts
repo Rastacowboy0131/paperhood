@@ -181,6 +181,21 @@ test("buy then sell: portfolio math is consistent and PnL sane", async () => {
   assert.equal(pf.history.length, 2);
   assert.equal(pf.history[0].side, "sell");
   assert.equal(pf.history[1].side, "buy");
+  // History rows carry token identity so the frontend needs no client-side join.
+  assert.equal(pf.history[0].symbol, "MEME");
+  assert.equal(pf.history[0].name, "Meme Token");
+  assert.equal(pf.history[1].symbol, "MEME");
+  // Per-trade realized PnL: set on sells, null on buys.
+  assert.ok(Math.abs(pf.history[0].realizedPnlUsd - s.realizedPnlUsd) < 1e-6);
+  assert.equal(pf.history[1].realizedPnlUsd, null);
+  // Positions carry name too.
+  const buyAgain = await app.inject({
+    method: "POST", url: "/trade", headers: { cookie },
+    payload: { token: MEME, side: "buy", amount: "100" },
+  });
+  assert.equal(buyAgain.statusCode, 200);
+  pf = (await app.inject({ method: "GET", url: "/portfolio", headers: { cookie } })).json();
+  assert.equal(pf.positions[0].name, "Meme Token");
 });
 
 test("overdraft and oversell rejected", async () => {

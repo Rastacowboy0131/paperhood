@@ -48,6 +48,7 @@ export interface QuoteResponse {
 export interface Position {
   token: string;
   symbol: string;
+  name: string;
   pair: string;
   qty: string;
   qtyDec: number;
@@ -76,12 +77,15 @@ export interface HistoryRow {
   id: number;
   pair: string;
   token: string;
+  symbol: string;
+  name: string;
   side: "buy" | "sell";
   amountIn: string;
   amountOut: string;
   execPriceUsd: number;
   priceImpactPct: number;
   feeUsd: number;
+  realizedPnlUsd: number | null;
   ts: number;
 }
 

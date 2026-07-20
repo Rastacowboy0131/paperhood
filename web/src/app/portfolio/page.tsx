@@ -107,6 +107,7 @@ export default function PortfolioPage() {
                 <th className="px-3 py-2 text-right">USD</th>
                 <th className="px-3 py-2 text-right">Fee</th>
                 <th className="px-3 py-2 text-right">Impact</th>
+                <th className="px-3 py-2 text-right">Realized</th>
               </tr>
             </thead>
             <tbody>
@@ -119,8 +120,8 @@ export default function PortfolioPage() {
                     {t.side.toUpperCase()}
                   </td>
                   <td className="px-3 py-2">
-                    <Link href={`/t/${t.token}`} className="text-term-accent hover:underline">
-                      {truncAddr(t.token)}
+                    <Link href={`/t/${t.token}`} className="text-term-accent hover:underline" title={t.name}>
+                      {t.symbol || truncAddr(t.token)}
                     </Link>
                   </td>
                   <td className="num px-3 py-2 text-right">
@@ -130,11 +131,14 @@ export default function PortfolioPage() {
                   <td className="num px-3 py-2 text-right text-term-dim">
                     {t.priceImpactPct != null ? `${t.priceImpactPct.toFixed(2)}%` : "-"}
                   </td>
+                  <td className={`num px-3 py-2 text-right ${t.realizedPnlUsd != null ? pnlClass(t.realizedPnlUsd) : "text-term-dim"}`}>
+                    {t.realizedPnlUsd != null ? `${sign(t.realizedPnlUsd)}$${fmtUsd(t.realizedPnlUsd, 2)}` : "-"}
+                  </td>
                 </tr>
               ))}
               {!pf.history.length && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-term-dim">
+                  <td colSpan={7} className="px-3 py-6 text-center text-term-dim">
                     No trades yet this season.
                   </td>
                 </tr>

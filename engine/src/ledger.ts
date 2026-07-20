@@ -173,9 +173,9 @@ export async function sell(db: DatabaseSync, userId: number, pair: string, token
   const realizedPnlUsd = usdOut - costBasis;
 
   db.prepare(
-    `INSERT INTO trades (user_id, season_id, pair_address, token_address, side, amount_in, amount_out, exec_price, impact, fee, ts)
-     VALUES (?, ?, ?, ?, 'sell', ?, ?, ?, ?, ?, ?)`
-  ).run(userId, seasonId, q.pair, token.toLowerCase(), tokenQty.toString(), String(usdOut), execPriceUsd, q.priceImpactPct, feeUsd, Math.floor(Date.now() / 1000));
+    `INSERT INTO trades (user_id, season_id, pair_address, token_address, side, amount_in, amount_out, exec_price, impact, fee, realized_pnl, ts)
+     VALUES (?, ?, ?, ?, 'sell', ?, ?, ?, ?, ?, ?, ?)`
+  ).run(userId, seasonId, q.pair, token.toLowerCase(), tokenQty.toString(), String(usdOut), execPriceUsd, q.priceImpactPct, feeUsd, realizedPnlUsd, Math.floor(Date.now() / 1000));
   const tradeId = Number((db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number }).id);
   return { tradeId, quote: q, usdOut, realizedPnlUsd };
 }
