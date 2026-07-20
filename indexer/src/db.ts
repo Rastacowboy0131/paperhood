@@ -90,3 +90,14 @@ for (const col of ["total_supply REAL", "supply_ts INTEGER"]) {
     // column already exists
   }
 }
+
+// Read-side queries filter with COLLATE NOCASE, which the case-sensitive
+// primary keys and idx_snap_pair_ts cannot serve, so every lookup was a
+// full table scan (slow once candles grew after the history backfill).
+// These NOCASE indexes let those queries use an index without touching
+// any call sites. Safe to re-run.
+db.exec(`
+CREATE INDEX IF NOT EXISTS idx_snap_pair_nocase_ts ON snapshots(pair_address COLLATE NOCASE, ts);
+CREATE INDEX IF NOT EXISTS idx_candles_pair_nocase_minute ON candles(pair_address COLLATE NOCASE, minute);
+CREATE INDEX IF NOT EXISTS idx_candles_hourly_pair_nocase_hour ON candles_hourly(pair_address COLLATE NOCASE, hour);
+`);
