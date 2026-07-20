@@ -182,3 +182,14 @@ export function fmtCompact(n: number | undefined | null): string {
   if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(1) + "K";
   return n.toFixed(2);
 }
+
+// Human-readable market cap: $12.5K / $3.4M / $1.2B.
+export function fmtMcap(n: number | undefined | null): string {
+  if (n === undefined || n === null || Number.isNaN(n)) return "-";
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return "$" + (n / 1e12).toFixed(1) + "T";
+  if (abs >= 1e9) return "$" + (n / 1e9).toFixed(1) + "B";
+  if (abs >= 1e6) return "$" + (n / 1e6).toFixed(1) + "M";
+  if (abs >= 1e3) return "$" + (n / 1e3).toFixed(1) + "K";
+  return "$" + n.toFixed(2);
+}

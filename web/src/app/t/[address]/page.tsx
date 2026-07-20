@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, Candle, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, truncAddr } from "@/lib/api";
+import { api, Candle, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
 import { CandleChart } from "@/components/CandleChart";
 import { useAuth } from "@/lib/auth";
@@ -31,6 +31,23 @@ interface TokenDetail {
 }
 
 const TFS = ["1m", "5m", "1h", "1d"] as const;
+
+// Quick-buy preset amounts per denomination.
+const BUY_PRESETS: Record<"usd" | "eth", number[]> = {
+  usd: [25, 50, 100, 500],
+  eth: [0.01, 0.05, 0.1, 0.5],
+};
+
+// Max single-buy cap: min(3.5% of total supply, 35,000,000 tokens).
+// Mirrors the server-side enforcement in engine/src/ledger.ts.
+const MAX_BUY_SUPPLY_PCT = 3.5;
+const MAX_BUY_ABS_TOKENS = 35_000_000;
+function maxBuyTokens(totalSupply: number | null): number {
+  if (totalSupply != null && totalSupply > 0) {
+    return Math.min((totalSupply * MAX_BUY_SUPPLY_PCT) / 100, MAX_BUY_ABS_TOKENS);
+  }
+  return MAX_BUY_ABS_TOKENS;
+}
 
 export default function TradePage() {
   const params = useParams<{ address: string }>();
@@ -168,6 +185,12 @@ export default function TradePage() {
   const quoteOutDec = quote ? Number(quote.amountOut) / 10 ** (side === "buy" ? decimals : 18) : null;
   const impact = quote?.priceImpactPct ?? 0;
   const impactColor = impact > 5 ? "text-term-red" : impact > 2 ? "text-term-amber" : "text-term-green";
+  const capTokens = maxBuyTokens(detail.totalSupply);
+  const buySupplyPct =
+    side === "buy" && quoteOutDec != null && detail.totalSupply != null && detail.totalSupply > 0
+      ? (quoteOutDec / detail.totalSupply) * 100
+      : null;
+  const overCap = side === "buy" && quoteOutDec != null && quoteOutDec > capTokens;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -191,6 +214,7 @@ export default function TradePage() {
             </span>
           )}
           <span className="ml-auto text-xs text-term-dim">
+            {detail.mcapUsd != null && <>mcap {fmtMcap(detail.mcapUsd)} · </>}
             {detail.pool.dex} {detail.pool.version} · liq ${fmtCompact(detail.pool.liquidityUsd)} · vol $
             {fmtCompact(detail.pool.volume24hUsd)} · pool {truncAddr(detail.pool.pair)}
           </span>
@@ -227,6 +251,7 @@ export default function TradePage() {
           {candles.length ? (
             <CandleChart
               candles={candles}
+              compact={metric === "mcap"}
               multiplier={
                 (denom === "eth" ? 1 : ethUsd || 1) *
                 (metric === "mcap" ? detail.totalSupply ?? 1 : 1)
@@ -273,6 +298,18 @@ export default function TradePage() {
                 inputMode="decimal"
                 className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-2 outline-none focus:border-term-accent"
               />
+              <span className="mt-2 flex gap-1">
+                {BUY_PRESETS[denom].map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setAmountBuy(String(v))}
+                    className={`num flex-1 rounded border px-2 py-1 text-xs ${amountBuy === String(v) ? "border-term-accent text-term-accent" : "border-term-border text-term-dim hover:text-term-text"}`}
+                  >
+                    {denom === "usd" ? `$${v}` : v}
+                  </button>
+                ))}
+              </span>
             </label>
           ) : (
             <label className="mb-3 block text-sm">
@@ -301,6 +338,14 @@ export default function TradePage() {
                       : `$${fmtUsd(quoteOutDec * ethUsd, 2)}`}
                 </span>
               </div>
+              {buySupplyPct != null && (
+                <div className="flex justify-between">
+                  <span className="text-term-dim">% of supply</span>
+                  <span className={`num ${overCap ? "text-term-red" : ""}`}>
+                    {buySupplyPct < 0.001 ? "<0.001" : buySupplyPct.toFixed(3)}%
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-term-dim">Exec price</span>
                 <span className="num">
@@ -324,10 +369,22 @@ export default function TradePage() {
             </div>
           )}
 
+          {side === "buy" && (
+            <div className="mb-2 text-[10px] text-term-dim">
+              Max per buy: {fmtCompact(capTokens)} {detail.symbol}
+              {detail.totalSupply != null ? ` (min of ${MAX_BUY_SUPPLY_PCT}% supply / ${fmtCompact(MAX_BUY_ABS_TOKENS)})` : ""}
+            </div>
+          )}
+          {overCap && (
+            <div className="mb-2 text-xs text-term-red">
+              Order too large: exceeds the max single-buy cap of {fmtCompact(capTokens)} {detail.symbol}. Reduce the amount.
+            </div>
+          )}
+
           {user ? (
             <button
               onClick={executeTrade}
-              disabled={trading || !quote || (side === "sell" && !position)}
+              disabled={trading || !quote || overCap || (side === "sell" && !position)}
               className={`w-full rounded py-2 font-semibold text-black disabled:opacity-40 ${side === "buy" ? "bg-term-green" : "bg-term-red"}`}
             >
               {trading ? "Executing..." : side === "buy" ? `Buy ${detail.symbol}` : `Sell ${detail.symbol}`}

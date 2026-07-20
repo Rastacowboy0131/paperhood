@@ -7,7 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { migrate } from "../src/db.js";
 import {
   getOrCreateUser, getSeasonId, seasonStart, buy, sell, cashBalanceUsd,
-  positionQty, getPortfolio, setEthUsdForTest, STARTING_BALANCE_USD, realizedPnl,
+  positionQty, getPortfolio, setEthUsdForTest, STARTING_BALANCE_USD, realizedPnl, maxBuyTokens,
 } from "../src/ledger.js";
 import { weeklyLeaderboard, dailyLeaderboard } from "../src/leaderboard.js";
 
@@ -129,4 +129,23 @@ test("season boundaries are Mondays 00:00 UTC", () => {
   assert.equal(seasonStart(mon), mon);
   assert.equal(seasonStart(mon + 3 * 86400 + 12345), mon); // Thursday same week
   assert.equal(seasonStart(mon - 1), mon - 7 * 86400);     // Sunday 23:59:59 is prior season
+});
+
+test("max buy cap: min(3.5% of supply, 35M tokens)", async () => {
+  assert.equal(maxBuyTokens(null), 35_000_000);
+  assert.equal(maxBuyTokens(0), 35_000_000);
+  assert.equal(maxBuyTokens(2_000_000_000), 35_000_000);      // 3.5% = 70M, abs cap wins
+  assert.equal(maxBuyTokens(100_000_000), 3_500_000);         // 3.5% wins
+  assert.equal(maxBuyTokens(1_000_000_000), 35_000_000);      // exactly at the abs cap
+
+  // Enforcement: tiny supply makes the pct cap trip on a normal-size buy.
+  const db = fakeDb();
+  db.exec("ALTER TABLE pools ADD COLUMN total_supply REAL");
+  db.prepare("UPDATE pools SET total_supply = ? WHERE pair_address = ?").run(100_000, PAIR);
+  const uid = getOrCreateUser(db, "0x0000000000000000000000000000000000000005");
+  // $1000 buys ~3960 MEME, cap is 3.5% of 100k = 3500 -> rejected.
+  await assert.rejects(() => buy(db, uid, PAIR, MEME, 1000), /max order size/);
+  // A small buy under the cap still works.
+  const r = await buy(db, uid, PAIR, MEME, 100);
+  assert.ok(r.tokensOut > 0n);
 });

@@ -4,9 +4,18 @@
 
 import { useEffect, useRef } from "react";
 import { createChart, IChartApi, ISeriesApi, ColorType } from "lightweight-charts";
-import { Candle } from "@/lib/api";
+import { Candle, fmtMcap } from "@/lib/api";
 
-export function CandleChart({ candles, multiplier }: { candles: Candle[]; multiplier: number }) {
+export function CandleChart({
+  candles,
+  multiplier,
+  compact = false,
+}: {
+  candles: Candle[];
+  multiplier: number;
+  // Compact mode formats axis/crosshair values as $12.5K / $3.4M / $1.2B (used for mcap).
+  compact?: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -33,7 +42,9 @@ export function CandleChart({ candles, multiplier }: { candles: Candle[]; multip
       borderVisible: false,
       wickUpColor: "#22c55e",
       wickDownColor: "#ef4444",
-      priceFormat: { type: "price", precision: 6, minMove: 0.000001 },
+      priceFormat: compact
+        ? { type: "custom", formatter: (p: number) => fmtMcap(p), minMove: 0.01 }
+        : { type: "price", precision: 6, minMove: 0.000001 },
     });
     chartRef.current = chart;
     seriesRef.current = series;
@@ -48,7 +59,7 @@ export function CandleChart({ candles, multiplier }: { candles: Candle[]; multip
       chartRef.current = null;
       seriesRef.current = null;
     };
-  }, []);
+  }, [compact]);
 
   useEffect(() => {
     if (!seriesRef.current) return;
@@ -61,7 +72,7 @@ export function CandleChart({ candles, multiplier }: { candles: Candle[]; multip
     }));
     seriesRef.current.setData(data);
     chartRef.current?.timeScale().fitContent();
-  }, [candles, multiplier]);
+  }, [candles, multiplier, compact]);
 
   return <div ref={containerRef} className="w-full" />;
 }

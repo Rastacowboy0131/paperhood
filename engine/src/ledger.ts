@@ -3,6 +3,19 @@ import { quoteSwap, getTokenMeta, Quote } from "./quote.js";
 
 export const STARTING_BALANCE_USD = 10_000;
 
+// Max buy cap: a single buy order may not receive more than
+// min(3.5% of total supply, 35,000,000 tokens). If total supply is unknown,
+// only the absolute 35M cap applies. Both limits are in decimal-adjusted tokens.
+export const MAX_BUY_SUPPLY_PCT = 3.5;
+export const MAX_BUY_ABS_TOKENS = 35_000_000;
+
+export function maxBuyTokens(totalSupply: number | null | undefined): number {
+  if (totalSupply != null && totalSupply > 0) {
+    return Math.min((totalSupply * MAX_BUY_SUPPLY_PCT) / 100, MAX_BUY_ABS_TOKENS);
+  }
+  return MAX_BUY_ABS_TOKENS;
+}
+
 // ---------- ETH/USD rate ----------
 // There is no liquid WETH/stablecoin pool on Robinhood chain (every active
 // pool quotes in WETH). USD rate comes from dexscreener: priceUsd/priceNative
@@ -127,6 +140,12 @@ export async function buy(db: DatabaseSync, userId: number, pair: string, token:
 
   const pool = db.prepare("SELECT quote_token FROM pools WHERE pair_address = ? COLLATE NOCASE").get(pair) as { quote_token: string } | undefined;
   if (!pool) throw new Error(`unknown pool ${pair}`);
+  // total_supply may not exist in older schemas (added by indexer migration).
+  let totalSupply: number | null = null;
+  try {
+    const s = db.prepare("SELECT total_supply FROM pools WHERE pair_address = ? COLLATE NOCASE").get(pair) as { total_supply: number | null } | undefined;
+    totalSupply = s?.total_supply ?? null;
+  } catch { /* column missing */ }
   const quoteTok = pool.quote_token;
   const quoteMeta = await getTokenMeta(db, quoteTok);
   const ethUsd = await getEthUsd(db);
@@ -139,6 +158,12 @@ export async function buy(db: DatabaseSync, userId: number, pair: string, token:
 
   const outMeta = await getTokenMeta(db, q.tokenOut);
   const tokensOutDec = Number(q.amountOut) / 10 ** outMeta.decimals;
+  const capTokens = maxBuyTokens(totalSupply);
+  if (tokensOutDec > capTokens) {
+    throw new Error(
+      `buy exceeds max order size: would receive ${Math.round(tokensOutDec).toLocaleString("en-US")} tokens, cap is ${Math.round(capTokens).toLocaleString("en-US")} (min of ${MAX_BUY_SUPPLY_PCT}% of supply and ${MAX_BUY_ABS_TOKENS.toLocaleString("en-US")})`
+    );
+  }
   const execPriceUsd = usdAmount / tokensOutDec;
   const feeUsd = (Number(q.feePaid) / 10 ** quoteMeta.decimals) * ethUsd;
 
