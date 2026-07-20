@@ -66,11 +66,15 @@ export function requireAuth(secret: string) {
 }
 
 function setSessionCookie(reply: FastifyReply, token: string): void {
+  // Web and API live on different sites (vercel.app vs railway.app), so the
+  // session cookie must be SameSite=None (with Secure) or browsers drop it
+  // on cross-site fetches and every page load looks signed out.
+  const crossSite = process.env.NODE_ENV === "production";
   reply.setCookie(COOKIE, token, {
     path: "/",
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: crossSite ? "none" : "lax",
+    secure: crossSite,
     maxAge: SESSION_TTL_S,
   });
 }
