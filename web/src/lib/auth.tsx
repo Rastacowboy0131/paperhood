@@ -3,7 +3,7 @@
 // Session context: who is signed in (per the API cookie), plus SIWE sign-in helpers.
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { useAccount, useChainId, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { createSiweMessage } from "viem/siwe";
 import { api, DEV_AUTH } from "./api";
 
@@ -33,7 +33,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { address: walletAddr, isConnected } = useAccount();
+  const { address: walletAddr, isConnected, chain } = useAccount();
+  const configChainId = useChainId();
   const { connectAsync, connectors } = useConnect();
   const { disconnectAsync } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
@@ -77,9 +78,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       if (!addr) throw new Error("No account");
       const { nonce } = await api.nonce();
+      // Use the wallet's actual chain in the SIWE message. Some wallets
+      // (Trust, Phantom) reject or warn on signatures whose message chainId
+      // differs from the active chain. Server accepts 1 or 4663.
+      const activeChainId = chain?.id ?? configChainId;
+      const siweChainId = activeChainId === 1 || activeChainId === 4663 ? activeChainId : 4663;
       const message = createSiweMessage({
         address: addr,
-        chainId: 4663,
+        chainId: siweChainId,
         domain: window.location.host,
         nonce,
         uri: window.location.origin,
@@ -93,7 +99,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setSigningIn(false);
     }
-  }, [walletAddr, isConnected, connectAsync, connectors, signMessageAsync]);
+  }, [walletAddr, isConnected, chain, configChainId, connectAsync, connectors, signMessageAsync]);
 
   const devSignIn = useCallback(async () => {
     setError(null);
