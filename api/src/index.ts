@@ -356,6 +356,36 @@ export async function buildServer(opts: BuildOpts = {}) {
     return { period, entries };
   });
 
+  // ---------- prize pool ----------
+  // Fee-funded prize pools, display only (no payout logic here).
+  // Window semantics:
+  //   daily pool  = 0.5 * SUM(fee) of trades since 00:00 UTC today; resets at the next UTC midnight.
+  //   weekly pool = 0.5 * SUM(fee) of trades since Monday 00:00 UTC of the current week;
+  //                 accrues all week and resets at the next Monday 00:00 UTC.
+  // Cached in memory for ~30s to keep it a cheap endpoint.
+  let prizeCache: { at: number; body: { dailyUsd: number; weeklyUsd: number; dayEndsAt: number; weekEndsAt: number } } | null = null;
+  app.get("/prizepool", async () => {
+    const now = Date.now();
+    if (prizeCache && now - prizeCache.at < 30000) return prizeCache.body;
+    const nowS = Math.floor(now / 1000);
+    const d = new Date(now);
+    const dayStartS = Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 1000);
+    const dayEndsAt = dayStartS + 86400;
+    // Monday 00:00 UTC: getUTCDay() is 0=Sun..6=Sat, so Monday offset = (day + 6) % 7 days back.
+    const weekStartS = dayStartS - ((d.getUTCDay() + 6) % 7) * 86400;
+    const weekEndsAt = weekStartS + 7 * 86400;
+    const sumFees = (sinceS: number) =>
+      (db.prepare("SELECT COALESCE(SUM(fee), 0) AS f FROM trades WHERE ts >= ? AND ts < ?").get(sinceS, nowS + 1) as { f: number }).f;
+    const body = {
+      dailyUsd: 0.5 * sumFees(dayStartS),
+      weeklyUsd: 0.5 * sumFees(weekStartS),
+      dayEndsAt,
+      weekEndsAt,
+    };
+    prizeCache = { at: now, body };
+    return body;
+  });
+
   // ---------- websocket ----------
 
   const hub = new WsHub(db, Number(process.env.WS_PUSH_INTERVAL_MS || 5000));

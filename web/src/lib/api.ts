@@ -132,6 +132,13 @@ export interface LeaderboardEntry {
   trades: number;
 }
 
+export interface PrizePool {
+  dailyUsd: number;
+  weeklyUsd: number;
+  dayEndsAt: number; // unix seconds, next 00:00 UTC
+  weekEndsAt: number; // unix seconds, next Monday 00:00 UTC
+}
+
 export interface Me {
   user: { userId: number; address: string; createdAt?: string } | null;
 }
@@ -218,6 +225,8 @@ export const api = {
     req<{ period: string; entries: LeaderboardEntry[] }>(`/leaderboard?period=${period}`),
   leaderboardWindow: (window: "1d" | "7d" | "all") =>
     req<{ window: string; entries: LeaderboardEntry[] }>(`/leaderboard?window=${window}`),
+  prizePool: () =>
+    req<PrizePool>("/prizepool"),
   nonce: () => req<{ nonce: string; expiresInS: number }>("/auth/nonce"),
   verify: (message: string, signature: string) =>
     req<{ ok: boolean; user: { userId: number; address: string } }>("/auth/verify", {

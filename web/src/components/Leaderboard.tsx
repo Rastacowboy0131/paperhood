@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api, LeaderboardEntry, fmtUsd } from "@/lib/api";
+import PrizePoolBanner from "@/components/PrizePoolBanner";
 
 type Window = "1d" | "7d" | "all";
 
@@ -111,6 +112,8 @@ export default function Leaderboard() {
           ))}
         </div>
       </div>
+
+      <PrizePoolBanner window={win} />
 
       {entries.length ? (
         <>

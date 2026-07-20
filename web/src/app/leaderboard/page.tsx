@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, LeaderboardEntry, fmtUsd } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import PrizePoolBanner from "@/components/PrizePoolBanner";
 
 type Period = "1d" | "7d" | "all";
 
@@ -48,6 +49,7 @@ export default function LeaderboardPage() {
           ))}
         </div>
       </div>
+      <PrizePoolBanner window={period} />
       {err && <div className="mb-3 text-sm text-term-red">{err}</div>}
       <div className="overflow-x-auto rounded border border-term-border">
         <table className="w-full text-sm">
