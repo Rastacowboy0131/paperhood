@@ -38,7 +38,11 @@ export function Nav() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
-          {error && <span className="max-w-64 truncate text-term-red">{error}</span>}
+          {error && (
+            <span className="max-w-96 break-words text-xs leading-tight text-term-red" title={error}>
+              {error}
+            </span>
+          )}
           {loading ? (
             <span className="text-term-dim">...</span>
           ) : address ? (

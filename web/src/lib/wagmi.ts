@@ -1,6 +1,7 @@
 "use client";
 
 import { http, createConfig } from "wagmi";
+import { mainnet } from "wagmi/chains";
 import { injected, walletConnect } from "wagmi/connectors";
 import { defineChain } from "viem";
 
@@ -20,7 +21,9 @@ export const robinhoodChain = defineChain({
 const wcProjectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID;
 
 export const wagmiConfig = createConfig({
-  chains: [robinhoodChain],
+  // Mainnet is included so mobile wallets that refuse the custom RH chain
+  // can still connect and sign (SIWE auth accepts chain 1 or 4663).
+  chains: [robinhoodChain, mainnet],
   connectors: [
     injected(),
     ...(wcProjectId
@@ -40,5 +43,6 @@ export const wagmiConfig = createConfig({
   ],
   transports: {
     [robinhoodChain.id]: http(),
+    [mainnet.id]: http(),
   },
 });
