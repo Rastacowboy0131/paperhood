@@ -121,6 +121,44 @@ export interface Me {
   user: { userId: number; address: string; createdAt?: string } | null;
 }
 
+// Token info panel payloads (/tokens/:address/trades, /holders, /paper-trades).
+export interface PoolTrade {
+  txHash: string;
+  wallet: string;
+  side: "buy" | "sell";
+  tokenAmount: number;
+  volumeUsd: number;
+  priceUsd: number;
+  ts: number;
+}
+
+export interface TopTrader {
+  wallet: string;
+  buys: number;
+  sells: number;
+  buyVolumeUsd: number;
+  sellVolumeUsd: number;
+  netVolumeUsd: number;
+}
+
+export interface Holder {
+  address: string;
+  isContract: boolean;
+  balance: number;
+  pctOfSupply: number | null;
+}
+
+export interface PaperTrade {
+  id: number;
+  display: string;
+  side: "buy" | "sell";
+  amountOutDec: number;
+  usd: number;
+  execPriceUsd: number;
+  realizedPnlUsd: number | null;
+  ts: number;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
@@ -143,6 +181,14 @@ export const api = {
   token: (addr: string) => req<TokenRow & { decimals: number; ethUsd?: number }>(`/tokens/${addr}`),
   candles: (addr: string, tf: string, limit = 300) =>
     req<{ pair: string; tf: string; candles: Candle[] }>(`/tokens/${addr}/candles?tf=${tf}&limit=${limit}`),
+  tokenTrades: (addr: string) =>
+    req<{ pair: string; explorer: string; trades: PoolTrade[]; topTraders: TopTrader[]; windowTrades: number }>(
+      `/tokens/${addr}/trades`
+    ),
+  tokenHolders: (addr: string) =>
+    req<{ explorer: string; holders: Holder[] }>(`/tokens/${addr}/holders`),
+  paperTrades: (addr: string) =>
+    req<{ trades: PaperTrade[] }>(`/tokens/${addr}/paper-trades`),
   quote: (body: { tokenIn: string; tokenOut: string; amountIn: string }) =>
     req<QuoteResponse>("/quote", { method: "POST", body: JSON.stringify(body) }),
   trade: (body: { token: string; side: "buy" | "sell"; amount: string | number }) =>

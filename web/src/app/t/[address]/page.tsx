@@ -6,6 +6,7 @@ import Link from "next/link";
 import { api, Candle, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
 import { CandleChart } from "@/components/CandleChart";
+import { TokenInfoTabs } from "@/components/TokenInfoTabs";
 import { useAuth } from "@/lib/auth";
 import { useDenom, fmtEth } from "@/lib/denom";
 
@@ -261,6 +262,7 @@ export default function TradePage() {
             <div className="flex h-[420px] items-center justify-center text-term-dim">No candle data yet</div>
           )}
         </div>
+        <TokenInfoTabs address={detail.address} symbol={detail.symbol} />
       </div>
 
       <div className="space-y-4">

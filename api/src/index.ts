@@ -11,6 +11,7 @@ import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd } from 
 import { dailyLeaderboard, weeklyLeaderboard } from "../../engine/src/leaderboard.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
+import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, EXPLORER_URL } from "./tokeninfo.js";
 import { WsHub } from "./ws.js";
 
 export interface BuildOpts {
@@ -101,6 +102,39 @@ export async function buildServer(opts: BuildOpts = {}) {
     const pool = poolForToken(db, address);
     if (!pool) return reply.code(404).send({ error: "token not in universe" });
     return { pair: pool.pair_address, tf, candles: getCandles(db, pool.pair_address, tf, limit) };
+  });
+
+  // ---------- token info panel (proxied + cached upstream data) ----------
+
+  app.get("/tokens/:address/trades", async (req, reply) => {
+    const { address } = req.params as { address: string };
+    const pool = poolForToken(db, address);
+    if (!pool) return reply.code(404).send({ error: "token not in universe" });
+    try {
+      const trades = await getPoolTrades(pool.pair_address, pool.token_address);
+      return { pair: pool.pair_address, explorer: EXPLORER_URL, trades, topTraders: aggregateTopTraders(trades), windowTrades: trades.length };
+    } catch (e) {
+      return reply.code(502).send({ error: `trades unavailable: ${(e as Error).message}` });
+    }
+  });
+
+  app.get("/tokens/:address/holders", async (req, reply) => {
+    const { address } = req.params as { address: string };
+    const pool = poolForToken(db, address);
+    if (!pool) return reply.code(404).send({ error: "token not in universe" });
+    try {
+      const { holders } = await getHolders(pool.token_address);
+      return { explorer: EXPLORER_URL, holders };
+    } catch (e) {
+      return reply.code(502).send({ error: `holders unavailable: ${(e as Error).message}` });
+    }
+  });
+
+  app.get("/tokens/:address/paper-trades", async (req, reply) => {
+    const { address } = req.params as { address: string };
+    const pool = poolForToken(db, address);
+    if (!pool) return reply.code(404).send({ error: "token not in universe" });
+    return { trades: getPaperTrades(db, pool.token_address) };
   });
 
   // ---------- quoting ----------
