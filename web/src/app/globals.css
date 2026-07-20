@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-term-bg text-term-text;
+}
+
+.num {
+  @apply font-mono tabular-nums;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0e12;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e2a36;
+  border-radius: 4px;
+}
