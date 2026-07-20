@@ -34,8 +34,8 @@ export default function Screener() {
     const q = search.trim().toLowerCase();
     let list = tokens.map((t) => {
       const lp = live[t.address.toLowerCase()];
-      if (!lp) return t;
-      return { ...t, priceQuote: lp.price, priceUsd: lp.price * ethUsd };
+      if (!lp || lp.price == null) return t;
+      return { ...t, priceQuote: lp.price, priceUsd: ethUsd != null ? lp.price * ethUsd : t.priceUsd };
     });
     if (q) {
       list = list.filter(
@@ -116,13 +116,16 @@ export default function Screener() {
                   <span className="text-term-dim">{t.name}</span>
                 </td>
                 <td className="num px-3 py-2 text-right">
-                  {denom === "usd" ? `$${fmtUsd(t.priceUsd)}` : `${t.priceQuote.toPrecision(6)} ETH`}
+                  {denom === "usd"
+                    ? `$${fmtUsd(t.priceUsd)}`
+                    : t.priceQuote != null
+                      ? `${t.priceQuote.toPrecision(6)} ETH`
+                      : "-"}
                 </td>
                 <td
-                  className={`num px-3 py-2 text-right ${t.change24hPct >= 0 ? "text-term-green" : "text-term-red"}`}
+                  className={`num px-3 py-2 text-right ${(t.change24hPct ?? 0) >= 0 ? "text-term-green" : "text-term-red"}`}
                 >
-                  {t.change24hPct >= 0 ? "+" : ""}
-                  {t.change24hPct.toFixed(2)}%
+                  {t.change24hPct != null ? `${t.change24hPct >= 0 ? "+" : ""}${t.change24hPct.toFixed(2)}%` : "-"}
                 </td>
                 <td className="num px-3 py-2 text-right">${fmtCompact(t.liquidityUsd)}</td>
                 <td className="num px-3 py-2 text-right">${fmtCompact(t.volume24hUsd)}</td>

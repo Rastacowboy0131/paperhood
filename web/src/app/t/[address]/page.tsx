@@ -163,7 +163,7 @@ export default function TradePage() {
           <h1 className="text-xl font-bold">{detail.symbol}</h1>
           <span className="text-term-dim">{detail.name}</span>
           <span className="num text-lg">{priceUsd != null ? `$${fmtUsd(priceUsd)}` : "-"}</span>
-          {detail.change24hPct != null && (
+          {typeof detail.change24hPct === "number" && (
             <span className={`num ${detail.change24hPct >= 0 ? "text-term-green" : "text-term-red"}`}>
               {detail.change24hPct >= 0 ? "+" : ""}
               {detail.change24hPct.toFixed(2)}% 24h
