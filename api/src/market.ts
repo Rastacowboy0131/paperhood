@@ -13,12 +13,15 @@ export interface TokenListItem {
   priceQuote: number | null;   // quote tokens per 1 token, decimal adjusted (usually WETH)
   priceUsd: number | null;
   change24hPct: number | null;
+  totalSupply: number | null;  // decimal adjusted, read on-chain by the indexer
+  mcapUsd: number | null;
 }
 
 interface PoolRow {
   pair_address: string; token_address: string; symbol: string; name: string;
   dex_id: string; version: string; quote_token: string; quote_symbol: string;
   liquidity_usd: number; volume24h: number;
+  total_supply: number | null; supply_ts: number | null;
 }
 
 // Canonical pool per token: deepest active pool.
@@ -68,6 +71,7 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
     const snap = latestPrice(db, p.pair_address);
     const prev = price24hAgo(db, p.pair_address);
     const price = snap?.price ?? null;
+    const priceUsd = price != null && ethUsd != null && p.quote_symbol === "WETH" ? price * ethUsd : null;
     const change = price != null && prev != null && prev > 0 ? ((price - prev) / prev) * 100 : null;
     out.push({
       address: p.token_address,
@@ -79,8 +83,10 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
       liquidityUsd: p.liquidity_usd,
       volume24hUsd: p.volume24h,
       priceQuote: price,
-      priceUsd: price != null && ethUsd != null && p.quote_symbol === "WETH" ? price * ethUsd : null,
+      priceUsd: priceUsd,
       change24hPct: change,
+      totalSupply: p.total_supply ?? null,
+      mcapUsd: priceUsd != null && p.total_supply != null ? priceUsd * p.total_supply : null,
     });
   }
   return out;

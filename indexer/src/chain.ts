@@ -25,6 +25,7 @@ export const pairAbi = parseAbi([
 
 export const erc20Abi = parseAbi([
   "function decimals() view returns (uint8)",
+  "function totalSupply() view returns (uint256)",
 ]);
 
 export const v2Abi = parseAbi([

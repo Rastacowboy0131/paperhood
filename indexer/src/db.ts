@@ -79,3 +79,14 @@ CREATE TABLE IF NOT EXISTS candles_hourly (
   PRIMARY KEY (pair_address, hour)
 );
 `);
+
+// Additive columns (v3 stays the schema version; these are safe to re-run).
+// total_supply is decimal adjusted (human units) for the tracked token;
+// supply_ts is when it was last read, used for periodic refresh.
+for (const col of ["total_supply REAL", "supply_ts INTEGER"]) {
+  try {
+    db.exec(`ALTER TABLE pools ADD COLUMN ${col}`);
+  } catch {
+    // column already exists
+  }
+}

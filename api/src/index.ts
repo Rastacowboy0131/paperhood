@@ -67,6 +67,8 @@ export async function buildServer(opts: BuildOpts = {}) {
     let meta = null;
     try { meta = await getTokenMeta(db, address); } catch { /* chain unreachable */ }
     const price = snap?.price ?? null;
+    const priceUsd = price != null && ethUsd != null && pool.quote_symbol === "WETH" ? price * ethUsd : null;
+    const totalSupply = (pool as { total_supply?: number | null }).total_supply ?? null;
     return {
       address: pool.token_address,
       symbol: pool.symbol,
@@ -82,9 +84,11 @@ export async function buildServer(opts: BuildOpts = {}) {
         volume24hUsd: pool.volume24h,
       },
       priceQuote: price,
-      priceUsd: price != null && ethUsd != null && pool.quote_symbol === "WETH" ? price * ethUsd : null,
+      priceUsd,
       priceTs: snap?.ts ?? null,
       change24hPct: price != null && prev != null && prev > 0 ? ((price - prev) / prev) * 100 : null,
+      totalSupply,
+      mcapUsd: priceUsd != null && totalSupply != null ? priceUsd * totalSupply : null,
     };
   });
 

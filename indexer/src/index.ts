@@ -1,6 +1,7 @@
 import { runDiscovery } from "./discovery.js";
 import { pollOnce } from "./poller.js";
 import { runBackfill } from "./backfill.js";
+import { refreshSupplies } from "./supply.js";
 
 const POLL_MS = Number(process.env.POLL_INTERVAL_MS ?? 10_000);
 const DISCOVERY_MS = Number(process.env.DISCOVERY_INTERVAL_MS ?? 15 * 60_000);
@@ -35,6 +36,19 @@ async function discoveryLoop() {
   }
 }
 
+// Total supply reads are cheap and rarely change; piggyback on the discovery
+// cadence (refreshSupplies itself skips tokens read recently).
+async function supplyLoop() {
+  while (running) {
+    try {
+      await refreshSupplies();
+    } catch (e) {
+      console.warn("supply refresh failed:", (e as Error).message);
+    }
+    await new Promise((r) => setTimeout(r, DISCOVERY_MS));
+  }
+}
+
 function shutdown() {
   console.log("shutting down");
   running = false;
@@ -47,6 +61,7 @@ console.log("paperhood indexer starting");
 await runDiscovery().catch((e) => console.warn("initial discovery failed:", e.message));
 // Historical backfill runs once in the background; slow by design (rate limited).
 void runBackfill().catch((e) => console.warn("backfill failed:", e.message));
+void supplyLoop();
 void discoveryLoop; // initial run done above; start the repeat loop below
 (async () => {
   await new Promise((r) => setTimeout(r, DISCOVERY_MS));
