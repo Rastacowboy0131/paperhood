@@ -370,3 +370,37 @@ test("POST /auth/logout clears the cookie", async () => {
   const cleared = out.headers["set-cookie"] as string;
   assert.ok(cleared.includes("ph_session=;") || cleared.includes("ph_session="));
 });
+
+test("orders: create, list, cancel, auth required, validation", async () => {
+  // Unauthed create is rejected.
+  const noAuth = await app.inject({ method: "POST", url: "/orders", payload: { token: MEME, side: "buy", type: "limit", triggerPrice: 0.00005, amount: 100 } });
+  assert.equal(noAuth.statusCode, 401);
+
+  // Bad inputs.
+  const bad1 = await app.inject({ method: "POST", url: "/orders", headers: { cookie }, payload: { token: MEME, side: "hold", type: "limit", triggerPrice: 1, amount: 1 } });
+  assert.equal(bad1.statusCode, 400);
+  const bad2 = await app.inject({ method: "POST", url: "/orders", headers: { cookie }, payload: { token: MEME, side: "buy", type: "limit", triggerPrice: -1, amount: 1 } });
+  assert.equal(bad2.statusCode, 400);
+  const bad3 = await app.inject({ method: "POST", url: "/orders", headers: { cookie }, payload: { token: MEME, side: "buy", type: "stop", triggerPrice: 0.00005, amount: 100 } });
+  assert.equal(bad3.statusCode, 400);
+  assert.match(bad3.json().error, /sell-only/);
+
+  // Create a limit buy below market (0.0001), so it stays open.
+  const created = await app.inject({ method: "POST", url: "/orders", headers: { cookie }, payload: { token: MEME, side: "buy", type: "limit", triggerPrice: 0.00005, amount: 100 } });
+  assert.equal(created.statusCode, 200);
+  const order = created.json().order;
+  assert.equal(order.status, "open");
+  assert.equal(order.side, "buy");
+  assert.equal(order.triggerPrice, 0.00005);
+
+  // List filtered by token.
+  const list = await app.inject({ method: "GET", url: `/orders?token=${MEME}`, headers: { cookie } });
+  assert.equal(list.statusCode, 200);
+  assert.ok(list.json().orders.some((o: { id: number }) => o.id === order.id));
+
+  // Cancel it; a second cancel 404s.
+  const del = await app.inject({ method: "DELETE", url: `/orders/${order.id}`, headers: { cookie } });
+  assert.equal(del.statusCode, 200);
+  const again = await app.inject({ method: "DELETE", url: `/orders/${order.id}`, headers: { cookie } });
+  assert.equal(again.statusCode, 404);
+});

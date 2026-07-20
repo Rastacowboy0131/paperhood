@@ -87,6 +87,27 @@ DELETE FROM trades;
     db.exec("ALTER TABLE trades ADD COLUMN realized_pnl REAL");
     backfillRealizedPnl(db);
   }
+
+  // Limit / stop orders (see orders.ts).
+  db.exec(`
+CREATE TABLE IF NOT EXISTS orders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token_address TEXT NOT NULL,
+  pair_address TEXT NOT NULL,
+  side TEXT NOT NULL,
+  type TEXT NOT NULL,
+  trigger_price REAL NOT NULL,
+  amount REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open',
+  fail_reason TEXT,
+  created_at INTEGER NOT NULL,
+  filled_at INTEGER,
+  filled_price_usd REAL
+);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at);
+`);
 }
 
 // Replay trades per user/season/token in order, pricing each sell against

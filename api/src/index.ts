@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { openDb } from "../../engine/src/db.js";
 import { quoteSwap, getTokenMeta } from "../../engine/src/quote.js";
 import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd } from "../../engine/src/ledger.js";
+import { createOrder, listOrders, cancelOrder, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
 import { dailyLeaderboard, weeklyLeaderboard } from "../../engine/src/leaderboard.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
@@ -20,6 +21,23 @@ export interface BuildOpts {
 }
 
 type AuthedRequest = FastifyRequest & { user: SessionUser };
+
+function serializeOrder(o: import("../../engine/src/orders.js").OrderRow) {
+  return {
+    id: o.id,
+    token: o.token_address,
+    pair: o.pair_address,
+    side: o.side,
+    type: o.type,
+    triggerPrice: o.trigger_price,
+    amount: o.amount,
+    status: o.status,
+    failReason: o.fail_reason,
+    createdAt: o.created_at,
+    filledAt: o.filled_at,
+    filledPriceUsd: o.filled_price_usd,
+  };
+}
 
 export async function buildServer(opts: BuildOpts = {}) {
   const jwtSecret = process.env.JWT_SECRET || (process.env.DEV_AUTH === "1" ? "dev-secret-do-not-use" : "");
@@ -261,6 +279,63 @@ export async function buildServer(opts: BuildOpts = {}) {
     };
   });
 
+  // ---------- limit / stop orders (authed) ----------
+
+  app.post("/orders", { ...tradeLimit, preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const body = req.body as { token?: string; side?: string; type?: string; triggerPrice?: number; amount?: number };
+    if (!body?.token || !body?.side || !body?.type || body.triggerPrice == null || body.amount == null) {
+      return reply.code(400).send({ error: "token, side, type, triggerPrice, amount required" });
+    }
+    if (body.side !== "buy" && body.side !== "sell") return reply.code(400).send({ error: "side must be buy or sell" });
+    if (body.type !== "limit" && body.type !== "stop") return reply.code(400).send({ error: "type must be limit or stop" });
+    const trigger = Number(body.triggerPrice);
+    const amount = Number(body.amount);
+    if (!Number.isFinite(trigger) || trigger <= 0) return reply.code(400).send({ error: "triggerPrice must be a positive number" });
+    if (!Number.isFinite(amount) || amount <= 0) return reply.code(400).send({ error: "amount must be a positive number" });
+    const pool = poolForToken(db, body.token);
+    if (!pool) return reply.code(404).send({ error: "token not in universe" });
+    try {
+      const o = createOrder(db, user.userId, {
+        token: pool.token_address,
+        pair: pool.pair_address,
+        side: body.side as OrderSide,
+        type: body.type as OrderType,
+        triggerPrice: trigger,
+        amount,
+      });
+      return { order: serializeOrder(o) };
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
+  });
+
+  app.get("/orders", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    const token = (req.query as { token?: string }).token;
+    return { orders: listOrders(db, user.userId, token).map(serializeOrder) };
+  });
+
+  app.delete("/orders/:id", { preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "invalid order id" });
+    const ok = cancelOrder(db, user.userId, id);
+    if (!ok) return reply.code(404).send({ error: "order not found or not open" });
+    return { ok: true };
+  });
+
+  // Order execution loop: check open orders against fresh snapshot prices.
+  // Skipped in tests (call checkOpenOrders directly there).
+  let orderTimer: NodeJS.Timeout | null = null;
+  if (process.env.NODE_ENV !== "test") {
+    const iv = Number(process.env.ORDER_CHECK_INTERVAL_MS || 10000);
+    orderTimer = setInterval(() => {
+      checkOpenOrders(db).catch((e) => app.log.error(e, "order check failed"));
+    }, iv);
+    orderTimer.unref();
+  }
+
   // ---------- leaderboard ----------
 
   app.get("/leaderboard", async (req, reply) => {
@@ -287,7 +362,10 @@ export async function buildServer(opts: BuildOpts = {}) {
     return { ok: true, activePools: pools, latestSnapshotTs: snap.ts, snapshotAgeS: snap.ts ? Math.floor(Date.now() / 1000) - snap.ts : null };
   });
 
-  app.addHook("onClose", async () => hub.stop());
+  app.addHook("onClose", async () => {
+    hub.stop();
+    if (orderTimer) clearInterval(orderTimer);
+  });
   return { app, db };
 }
 
