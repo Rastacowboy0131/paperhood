@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import { EquityChart } from "@/components/EquityChart";
 import { BadgeGrid } from "@/components/Badges";
 import { ShareButton } from "@/components/ShareCard";
+import { TokenLogo } from "@/components/TokenLogo";
 
 function pnlClass(n: number) {
   return n >= 0 ? "text-term-green" : "text-term-red";
@@ -134,7 +135,8 @@ export default function PortfolioPage() {
               {pf.positions.map((p) => (
                 <tr key={p.token} className="border-t border-term-line transition-colors hover:bg-term-hover">
                   <td className="px-3 py-2.5">
-                    <Link href={`/t/${p.token}`} className="font-semibold text-term-accent hover:underline">
+                    <Link href={`/t/${p.token}`} className="flex items-center gap-2 font-semibold text-term-accent hover:underline">
+                      <TokenLogo src={p.imageUrl} symbol={p.symbol} size={22} />
                       {p.symbol}
                     </Link>
                   </td>

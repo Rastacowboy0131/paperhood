@@ -6,6 +6,7 @@ import { api, TokenRow, fmtUsd, fmtCompact, fmtMcap } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
 import { useDenom } from "@/lib/denom";
 import Leaderboard from "@/components/Leaderboard";
+import { TokenLogo } from "@/components/TokenLogo";
 
 type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd" | "priceUsd";
 
@@ -195,9 +196,7 @@ export default function Screener() {
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-term-raised text-[10px] font-bold text-term-accent">
-                        {(t.symbol || "?").slice(0, 2)}
-                      </span>
+                      <TokenLogo src={t.imageUrl} symbol={t.symbol} size={28} />
                       <div className="min-w-0 leading-tight">
                         <div className="truncate">
                           <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}

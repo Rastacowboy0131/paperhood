@@ -83,7 +83,15 @@ CREATE TABLE IF NOT EXISTS candles_hourly (
 // Additive columns (v3 stays the schema version; these are safe to re-run).
 // total_supply is decimal adjusted (human units) for the tracked token;
 // supply_ts is when it was last read, used for periodic refresh.
-for (const col of ["total_supply REAL", "supply_ts INTEGER"]) {
+for (const col of [
+  "total_supply REAL",
+  "supply_ts INTEGER",
+  // Token metadata from dexscreener pair info (logo + social links).
+  "image_url TEXT",
+  "website TEXT",
+  "twitter TEXT",
+  "telegram TEXT",
+]) {
   try {
     db.exec(`ALTER TABLE pools ADD COLUMN ${col}`);
   } catch {

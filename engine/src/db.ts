@@ -81,6 +81,14 @@ DELETE FROM trades;
   if (!hasColumn(db, "pools", "fee")) db.exec("ALTER TABLE pools ADD COLUMN fee INTEGER");
   if (!hasColumn(db, "pools", "token0")) db.exec("ALTER TABLE pools ADD COLUMN token0 TEXT");
 
+  // Token metadata from dexscreener (logo + social links), written by the
+  // indexer's discovery pass. Added here too so the engine can run against a
+  // db the indexer has not migrated yet.
+  for (const col of ["image_url TEXT", "website TEXT", "twitter TEXT", "telegram TEXT"]) {
+    const name = col.split(" ")[0];
+    if (!hasColumn(db, "pools", name)) db.exec(`ALTER TABLE pools ADD COLUMN ${col}`);
+  }
+
   // Per-trade realized PnL (sells only; USD). Added later, backfilled by
   // replaying each user's season trades FIFO.
   if (!hasColumn(db, "trades", "realized_pnl")) {

@@ -21,6 +21,11 @@ type DsPair = {
   quoteToken: { address: string; name: string; symbol: string };
   liquidity?: { usd?: number };
   volume?: { h24?: number };
+  info?: {
+    imageUrl?: string;
+    websites?: { label?: string; url: string }[];
+    socials?: { type: string; url: string }[];
+  };
 };
 
 async function search(q: string): Promise<DsPair[]> {
@@ -36,12 +41,17 @@ async function search(q: string): Promise<DsPair[]> {
 
 const upsert = db.prepare(`
 INSERT INTO pools (pair_address, token_address, symbol, name, dex_id, version,
-  quote_token, quote_symbol, liquidity_usd, volume24h, active, first_seen, last_seen)
+  quote_token, quote_symbol, liquidity_usd, volume24h, active, first_seen, last_seen,
+  image_url, website, twitter, telegram)
 VALUES (@pair, @token, @symbol, @name, @dex, @version, @quote, @quoteSymbol,
-  @liq, @vol, 1, @now, @now)
+  @liq, @vol, 1, @now, @now, @imageUrl, @website, @twitter, @telegram)
 ON CONFLICT(pair_address) DO UPDATE SET
   symbol=@symbol, name=@name, liquidity_usd=@liq, volume24h=@vol,
-  active=1, last_seen=@now
+  active=1, last_seen=@now,
+  image_url=COALESCE(@imageUrl, image_url),
+  website=COALESCE(@website, website),
+  twitter=COALESCE(@twitter, twitter),
+  telegram=COALESCE(@telegram, telegram)
 `);
 
 const deactivateStale = db.prepare(
@@ -68,6 +78,10 @@ export async function runDiscovery(): Promise<number> {
       if (liq < MIN_LIQ_USD) continue;
       const version = p.labels?.find((l) => /^v[234]$/.test(l)) ?? "v2";
       if (version === "v4") continue; // v4 quoting path comes later
+      // Token metadata (logo + links) from dexscreener pair info when present.
+      const socials = p.info?.socials ?? [];
+      const socialUrl = (type: string) =>
+        socials.find((s) => s.type?.toLowerCase() === type)?.url ?? null;
       upsert.run({
         pair: p.pairAddress,
         token: p.baseToken.address,
@@ -80,6 +94,10 @@ export async function runDiscovery(): Promise<number> {
         liq,
         vol: p.volume?.h24 ?? 0,
         now,
+        imageUrl: p.info?.imageUrl ?? null,
+        website: p.info?.websites?.[0]?.url ?? null,
+        twitter: socialUrl("twitter"),
+        telegram: socialUrl("telegram"),
       });
       count++;
     }

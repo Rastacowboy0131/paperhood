@@ -23,6 +23,10 @@ export interface TokenRow {
   decimals?: number;
   totalSupply?: number | null;
   mcapUsd?: number | null;
+  imageUrl?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
 }
 
 export interface TokensResponse {
@@ -57,6 +61,7 @@ export interface Position {
   symbol: string;
   name: string;
   pair: string;
+  imageUrl?: string | null;
   qty: string;
   qtyDec: number;
   costBasisUsd: number;

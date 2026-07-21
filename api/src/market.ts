@@ -15,6 +15,10 @@ export interface TokenListItem {
   change24hPct: number | null;
   totalSupply: number | null;  // decimal adjusted, read on-chain by the indexer
   mcapUsd: number | null;
+  imageUrl: string | null;
+  website: string | null;
+  twitter: string | null;
+  telegram: string | null;
 }
 
 interface PoolRow {
@@ -22,6 +26,8 @@ interface PoolRow {
   dex_id: string; version: string; quote_token: string; quote_symbol: string;
   liquidity_usd: number; volume24h: number;
   total_supply: number | null; supply_ts: number | null;
+  image_url: string | null; website: string | null;
+  twitter: string | null; telegram: string | null;
 }
 
 // Canonical pool per token: deepest active pool.
@@ -87,6 +93,10 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
       change24hPct: change,
       totalSupply: p.total_supply ?? null,
       mcapUsd: priceUsd != null && p.total_supply != null ? priceUsd * p.total_supply : null,
+      imageUrl: p.image_url ?? null,
+      website: p.website ?? null,
+      twitter: p.twitter ?? null,
+      telegram: p.telegram ?? null,
     });
   }
   return out;

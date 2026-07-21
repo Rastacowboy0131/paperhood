@@ -90,6 +90,7 @@ export async function buildServer(opts: BuildOpts = {}) {
     const price = snap?.price ?? null;
     const priceUsd = price != null && ethUsd != null && pool.quote_symbol === "WETH" ? price * ethUsd : null;
     const totalSupply = (pool as { total_supply?: number | null }).total_supply ?? null;
+    const px = pool as unknown as { image_url?: string | null; website?: string | null; twitter?: string | null; telegram?: string | null };
     return {
       address: pool.token_address,
       symbol: pool.symbol,
@@ -110,6 +111,10 @@ export async function buildServer(opts: BuildOpts = {}) {
       change24hPct: price != null && prev != null && prev > 0 ? ((price - prev) / prev) * 100 : null,
       totalSupply,
       mcapUsd: priceUsd != null && totalSupply != null ? priceUsd * totalSupply : null,
+      imageUrl: px.image_url ?? null,
+      website: px.website ?? null,
+      twitter: px.twitter ?? null,
+      telegram: px.telegram ?? null,
     };
   });
 
@@ -271,6 +276,11 @@ export async function buildServer(opts: BuildOpts = {}) {
     const nameStmt = db.prepare(
       "SELECT name FROM pools WHERE token_address = ? COLLATE NOCASE ORDER BY liquidity_usd DESC LIMIT 1"
     );
+    const imgStmt = db.prepare(
+      "SELECT image_url FROM pools WHERE token_address = ? COLLATE NOCASE AND image_url IS NOT NULL ORDER BY liquidity_usd DESC LIMIT 1"
+    );
+    const tokenImage = (token: string) =>
+      (imgStmt.get(token) as { image_url: string | null } | undefined)?.image_url ?? null;
     const tokenName = (token: string, fallback: string) =>
       (nameStmt.get(token) as { name: string | null } | undefined)?.name || fallback;
     return {
@@ -283,6 +293,7 @@ export async function buildServer(opts: BuildOpts = {}) {
       unrealizedPnlUsd: p.positions.reduce((s, x) => s + x.unrealizedPnlUsd, 0),
       positions: p.positions.map((x) => ({
         token: x.token, symbol: x.symbol, name: tokenName(x.token, x.symbol), pair: x.pair,
+        imageUrl: tokenImage(x.token),
         qty: x.qty.toString(), qtyDec: x.qtyDec,
         costBasisUsd: x.costBasisUsd, markUsd: x.markUsd, unrealizedPnlUsd: x.unrealizedPnlUsd,
       })),

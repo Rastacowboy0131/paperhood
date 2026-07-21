@@ -7,6 +7,7 @@ import { api, Candle, Order, Portfolio, Position, QuoteResponse, fmtUsd, fmtComp
 import { useLivePrices } from "@/lib/ws";
 import { CandleChart, ChartLine } from "@/components/CandleChart";
 import { TokenInfoTabs } from "@/components/TokenInfoTabs";
+import { TokenLogo } from "@/components/TokenLogo";
 import { useAuth } from "@/lib/auth";
 import { useDenom, fmtEth } from "@/lib/denom";
 
@@ -29,6 +30,10 @@ interface TokenDetail {
   change24hPct: number | null;
   totalSupply: number | null;
   mcapUsd: number | null;
+  imageUrl?: string | null;
+  website?: string | null;
+  twitter?: string | null;
+  telegram?: string | null;
 }
 
 const TFS = ["1m", "5m", "1h", "1d"] as const;
@@ -372,9 +377,7 @@ export default function TradePage() {
       {/* Token stats strip */}
       <div className="panel mb-3 flex flex-wrap items-center gap-x-1 gap-y-0 divide-x divide-term-line overflow-x-auto px-1 py-1">
         <div className="flex items-center gap-2 px-3 py-1.5">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-term-raised text-[11px] font-bold text-term-accent">
-            {detail.symbol.slice(0, 2)}
-          </span>
+          <TokenLogo src={detail.imageUrl} symbol={detail.symbol} size={28} />
           <div className="leading-tight">
             <div className="text-sm font-bold">{detail.symbol}</div>
             <div className="max-w-[140px] truncate text-[11px] text-term-dim">{detail.name}</div>
@@ -386,6 +389,53 @@ export default function TradePage() {
           >
             {copied ? "copied" : truncAddr(detail.address)}
           </button>
+          {(detail.website || detail.twitter || detail.telegram) && (
+            <span className="flex flex-wrap items-center gap-1">
+              {detail.website && (
+                <a
+                  href={detail.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Website"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border border-term-border text-term-dim transition-colors hover:bg-term-hover hover:text-term-text"
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <circle cx="12" cy="12" r="9" />
+                    <path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3z" />
+                  </svg>
+                </a>
+              )}
+              {detail.twitter && (
+                <a
+                  href={detail.twitter}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="X / Twitter"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border border-term-border text-term-dim transition-colors hover:bg-term-hover hover:text-term-text"
+                >
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </a>
+              )}
+              {detail.telegram && (
+                <a
+                  href={detail.telegram}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Telegram"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex h-6 w-6 items-center justify-center rounded-full border border-term-border text-term-dim transition-colors hover:bg-term-hover hover:text-term-text"
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
+                    <path d="M21.9 4.4c.3-1.2-.9-2.2-2-1.7L2.7 9.9c-1.2.5-1.1 2.2.1 2.6l4.5 1.4 1.7 5.3c.3 1 1.6 1.3 2.3.5l2.4-2.4 4.5 3.3c.9.6 2.1.2 2.4-.9zM8.3 13.1l9.2-5.7c.3-.2.5.2.3.4l-7.4 6.9c-.3.3-.5.6-.5 1l-.2 2.1c0 .3-.4.3-.5 0l-1.1-3.5c-.1-.4 0-.9.2-1.2z" />
+                  </svg>
+                </a>
+              )}
+            </span>
+          )}
         </div>
         {statCell(
           "Price",
