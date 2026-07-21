@@ -28,6 +28,7 @@ export interface TokenRow {
   twitter?: string | null;
   telegram?: string | null;
   imported?: boolean;
+  source?: string | null;
 }
 
 export interface TokensResponse {
@@ -289,10 +290,10 @@ export const api = {
     req<{ order: Order }>(`/orders/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   leaderboard: (period: "daily" | "weekly") =>
     req<{ period: string; entries: LeaderboardEntry[] }>(`/leaderboard?period=${period}`),
-  leaderboardWindow: (window: "1d" | "7d" | "all") =>
-    req<{ window: string; entries: LeaderboardEntry[] }>(`/leaderboard?window=${window}`),
-  leaderboardSeason: (season: number | "current") =>
-    req<{ season: SeasonInfo; entries: LeaderboardEntry[] }>(`/leaderboard?season=${season}`),
+  leaderboardWindow: (window: "1d" | "7d" | "all", metric: "equity" | "realized" = "equity") =>
+    req<{ window: string; entries: LeaderboardEntry[] }>(`/leaderboard?window=${window}&metric=${metric}`),
+  leaderboardSeason: (season: number | "current", metric: "equity" | "realized" = "equity") =>
+    req<{ season: SeasonInfo; entries: LeaderboardEntry[] }>(`/leaderboard?season=${season}&metric=${metric}`),
   seasons: () => req<SeasonsResponse>("/seasons"),
   closedTrades: (page = 1, pageSize = 20) =>
     req<{ page: number; pageSize: number; total: number; trades: ClosedTrade[] }>(

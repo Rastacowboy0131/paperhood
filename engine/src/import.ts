@@ -7,6 +7,7 @@
 // immediately, without waiting for the indexer's next poll cycle.
 import { DatabaseSync } from "node:sqlite";
 import { client, v2PoolAbi, v3PoolAbi, erc20Abi } from "./chain.js";
+import { lookupPonsToken } from "./pons.js";
 
 const CHAIN_SLUG = "robinhood";
 const DS_TOKENS_URL = "https://api.dexscreener.com/latest/dex/tokens";
@@ -42,6 +43,7 @@ export interface ImportResult {
   liquidityUsd: number;
   thinLiquidity: boolean;
   alreadyTracked: boolean;
+  source?: string; // "pons" when imported via the launchpad factory
 }
 
 export class ImportError extends Error {
@@ -187,6 +189,11 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
     .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
 
   if (usable.length === 0) {
+    // Dexscreener has no priced pair yet. Fresh Pons launchpad tokens live in
+    // a real v3 pool from block one but can take a while to show up on
+    // aggregators, so fall back to asking the Pons factory directly.
+    const pons = await lookupPonsToken(token);
+    if (pons) return importPonsToken(db, pons);
     throw new ImportError("no tradeable pair with pricing found for this address on Robinhood chain", 404);
   }
 
@@ -263,6 +270,18 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
       high = MAX(high, excluded.close), low = MIN(low, excluded.close), close = excluded.close, n = n + 1
   `).run(p.pairAddress, minute, price, price, price, price);
 
+  // Tag Pons launchpad tokens even when the pair came from dexscreener, so
+  // the web can badge them and show graduation progress. One cheap RPC read;
+  // failures just leave the tag off.
+  let source: string | undefined;
+  try {
+    const pons = await lookupPonsToken(token);
+    if (pons) {
+      source = "pons";
+      db.prepare("UPDATE pools SET source = 'pons' WHERE pair_address = ?").run(p.pairAddress);
+    }
+  } catch { /* tag only */ }
+
   return {
     address: token,
     symbol: p.baseToken.symbol,
@@ -271,5 +290,76 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
     liquidityUsd: liq,
     thinLiquidity: liq < THIN_LIQ_USD,
     alreadyTracked: false,
+    source,
+  };
+}
+
+// Import a Pons launchpad token straight from its on-chain v3 pool. The pool
+// is verified the same way as dex imports (slot0 read), so quoting, polling
+// and charts all work through the existing v3 path. liquidity_usd stays 0
+// until dexscreener picks the pair up, which keeps the thin-liquidity
+// warning on (accurate for fresh launches).
+// Exported for tests: dex imports fall into this when dexscreener has no
+// pair yet for a fresh Pons launch.
+export async function importPonsToken(
+  db: DatabaseSync,
+  pons: Awaited<ReturnType<typeof lookupPonsToken>> & object
+): Promise<ImportResult> {
+  const v = await verifyPoolOnChain(pons.pool, "v3");
+  if (pons.token !== v.token0 && pons.token !== v.token1) {
+    throw new ImportError("pons pool does not contain this token on-chain", 502);
+  }
+  const quoteToken = pons.token === v.token0 ? v.token1 : v.token0;
+  let quoteSymbol = "WETH";
+  try {
+    quoteSymbol = String(
+      await client.readContract({ address: quoteToken as `0x${string}`, abi: erc20Abi, functionName: "symbol" })
+    );
+  } catch { /* keep default */ }
+
+  const now = Math.floor(Date.now() / 1000);
+  db.prepare(`
+    INSERT INTO pools (pair_address, token_address, symbol, name, dex_id, version,
+      quote_token, quote_symbol, token0, token1, decimals0, decimals1, fee,
+      liquidity_usd, volume24h, active, imported, source,
+      first_seen, last_seen, image_url, website, twitter, telegram)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 1, 1, 'pons', ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(pair_address) DO UPDATE SET
+      active = 1, imported = 1, source = 'pons', last_seen = excluded.last_seen,
+      version = excluded.version, token0 = excluded.token0, token1 = excluded.token1,
+      decimals0 = excluded.decimals0, decimals1 = excluded.decimals1, fee = excluded.fee
+  `).run(
+    pons.pool, pons.token, pons.symbol, pons.name, "pons", v.version,
+    quoteToken, quoteSymbol, v.token0, v.token1, v.decimals0, v.decimals1, v.fee,
+    now, now, pons.imageUrl, pons.website, pons.twitter, pons.telegram,
+  );
+
+  const price = poolPrice(v, pons.token);
+  db.prepare(`
+    INSERT INTO snapshots (pair_address, ts, reserve0, reserve1, sqrt_price_x96, tick, liquidity, price)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    pons.pool, now,
+    v.reserve0?.toString() ?? null, v.reserve1?.toString() ?? null,
+    v.sqrtPriceX96?.toString() ?? null, v.tick ?? null, v.liquidity?.toString() ?? null,
+    price,
+  );
+  const minute = now - (now % 60);
+  db.prepare(`
+    INSERT INTO candles (pair_address, minute, open, high, low, close, n)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(pair_address, minute) DO UPDATE SET
+      high = MAX(high, excluded.close), low = MIN(low, excluded.close), close = excluded.close, n = n + 1
+  `).run(pons.pool, minute, price, price, price, price);
+
+  return {
+    address: pons.token,
+    symbol: pons.symbol,
+    name: pons.name,
+    pair: pons.pool,
+    liquidityUsd: 0,
+    thinLiquidity: true,
+    alreadyTracked: false,
+    source: "pons",
   };
 }

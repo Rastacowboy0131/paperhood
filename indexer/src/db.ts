@@ -95,6 +95,9 @@ for (const col of [
   // User-imported tokens (trade-any-CA): kept active even below the
   // discovery liquidity floor, and never staled out by discovery.
   "imported INTEGER DEFAULT 0",
+  // Where the pool record came from: NULL/dexscreener discovery, or "pons"
+  // for tokens imported straight from the Pons launchpad factory.
+  "source TEXT",
 ]) {
   try {
     db.exec(`ALTER TABLE pools ADD COLUMN ${col}`);

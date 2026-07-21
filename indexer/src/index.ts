@@ -2,6 +2,7 @@ import { runDiscovery } from "./discovery.js";
 import { pollOnce } from "./poller.js";
 import { runBackfill } from "./backfill.js";
 import { refreshSupplies } from "./supply.js";
+import { tagPonsPools } from "./pons.js";
 
 const POLL_MS = Number(process.env.POLL_INTERVAL_MS ?? 10_000);
 const DISCOVERY_MS = Number(process.env.DISCOVERY_INTERVAL_MS ?? 15 * 60_000);
@@ -45,6 +46,7 @@ async function supplyLoop() {
   while (running) {
     try {
       await refreshSupplies();
+      await tagPonsPools();
     } catch (e) {
       console.warn("supply refresh failed:", (e as Error).message);
     }

@@ -45,6 +45,8 @@ interface TokenDetail {
   twitter?: string | null;
   telegram?: string | null;
   imported?: boolean;
+  source?: string | null;
+  launchpad?: { progressPct: number; graduated: boolean } | null;
   thinLiquidity?: boolean;
 }
 
@@ -507,7 +509,21 @@ export default function TradePage() {
           >
             {copied ? "copied" : truncAddr(detail.address)}
           </button>
-          {detail.imported && (
+          {detail.source === "pons" && (
+            <span
+              className="rounded border border-term-border px-1.5 py-0.5 text-[10px] uppercase text-term-faint"
+              title={
+                detail.launchpad
+                  ? detail.launchpad.graduated
+                    ? "Pons launchpad token (graduated)"
+                    : `Pons launchpad token, ${detail.launchpad.progressPct.toFixed(1)}% to graduation`
+                  : "Pons launchpad token"
+              }
+            >
+              launchpad{detail.launchpad && !detail.launchpad.graduated ? ` ${detail.launchpad.progressPct.toFixed(0)}%` : ""}
+            </span>
+          )}
+          {detail.imported && detail.source !== "pons" && (
             <span className="rounded border border-term-border px-1.5 py-0.5 text-[10px] uppercase text-term-faint" title="User-imported token">
               imported
             </span>

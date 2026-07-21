@@ -247,7 +247,12 @@ export default function Screener() {
                         <div className="truncate">
                           <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
                           <span className="text-xs text-term-dim">{(t.name || "").slice(0, 28)}</span>
-                          {t.imported && (
+                          {t.source === "pons" && (
+                            <span className="ml-1 rounded border border-term-border px-1 text-[9px] uppercase text-term-faint" title="Pons launchpad token">
+                              launchpad
+                            </span>
+                          )}
+                          {t.imported && t.source !== "pons" && (
                             <span className="ml-1 rounded border border-term-border px-1 text-[9px] uppercase text-term-faint" title="User-imported token">
                               imported
                             </span>

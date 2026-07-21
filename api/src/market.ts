@@ -20,6 +20,7 @@ export interface TokenListItem {
   twitter: string | null;
   telegram: string | null;
   imported: boolean;
+  source: string | null;   // "pons" for launchpad-imported tokens
 }
 
 interface PoolRow {
@@ -30,6 +31,7 @@ interface PoolRow {
   image_url: string | null; website: string | null;
   twitter: string | null; telegram: string | null;
   imported: number | null;
+  source: string | null;
 }
 
 // Canonical pool per token: deepest active pool. Token addresses may be
@@ -103,6 +105,7 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
       twitter: p.twitter ?? null,
       telegram: p.telegram ?? null,
       imported: !!p.imported,
+      source: p.source ?? null,
     });
   }
   return out;

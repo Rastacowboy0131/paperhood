@@ -9,7 +9,7 @@ import { openDb } from "../../engine/src/db.js";
 import { quoteSwap, getTokenMeta } from "../../engine/src/quote.js";
 import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd, seasonInfo, listSeasons } from "../../engine/src/ledger.js";
 import { createOrder, listOrders, cancelOrder, updateOrderTrigger, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
-import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, seasonLeaderboard, seasonArchive, LeaderboardWindow } from "../../engine/src/leaderboard.js";
+import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, seasonLeaderboard, seasonArchive, LeaderboardWindow, LeaderboardMetric } from "../../engine/src/leaderboard.js";
 import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../engine/src/badges.js";
 import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
@@ -17,6 +17,7 @@ import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, RateLimitedError, EXPLORER_URL } from "./tokeninfo.js";
 import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
 import { backfillPairHistory } from "../../engine/src/backfill.js";
+import { ponsGraduation } from "../../engine/src/pons.js";
 import { WsHub } from "./ws.js";
 
 export interface BuildOpts {
@@ -93,7 +94,11 @@ export async function buildServer(opts: BuildOpts = {}) {
     const price = snap?.price ?? null;
     const priceUsd = price != null && ethUsd != null && pool.quote_symbol === "WETH" ? price * ethUsd : null;
     const totalSupply = (pool as { total_supply?: number | null }).total_supply ?? null;
-    const px = pool as unknown as { image_url?: string | null; header_url?: string | null; website?: string | null; twitter?: string | null; telegram?: string | null };
+    const px = pool as unknown as { image_url?: string | null; header_url?: string | null; website?: string | null; twitter?: string | null; telegram?: string | null; source?: string | null };
+    // Launchpad tokens get graduation progress (fee milestone on the locked
+    // v3 position, cheap single read; failures just hide the progress bar).
+    const source = px.source ?? null;
+    const grad = source === "pons" ? await ponsGraduation(pool.token_address).catch(() => null) : null;
     return {
       address: pool.token_address,
       symbol: pool.symbol,
@@ -120,6 +125,8 @@ export async function buildServer(opts: BuildOpts = {}) {
       twitter: px.twitter ?? null,
       telegram: px.telegram ?? null,
       imported: !!(pool as unknown as { imported?: number | null }).imported,
+      source,
+      launchpad: grad ? { progressPct: grad.progressPct, graduated: grad.graduated } : null,
       thinLiquidity: (pool.liquidity_usd ?? 0) < THIN_LIQ_USD,
     };
   });
@@ -491,16 +498,19 @@ export async function buildServer(opts: BuildOpts = {}) {
   // ---------- leaderboard ----------
 
   app.get("/leaderboard", async (req, reply) => {
-    const q = req.query as { period?: string; window?: string; season?: string };
+    const q = req.query as { period?: string; window?: string; season?: string; metric?: string };
+    // Metric: equity (default, mark-to-market) or realized (closed sells only).
+    const metric: LeaderboardMetric = q.metric === "realized" ? "realized" : "equity";
     // Season-scoped: ?season=current or ?season=<id> (monthly seasons, fresh 10k).
     if (q.season != null) {
       const seasonId = q.season === "current" ? getSeasonId(db) : Number(q.season);
       const info = Number.isInteger(seasonId) && seasonId > 0 ? seasonInfo(db, seasonId) : null;
       if (!info) return reply.code(404).send({ error: "unknown season" });
-      const entries = seasonLeaderboard(db, info.id);
+      const entries = seasonLeaderboard(db, info.id, metric);
       const badgeMap = badgesForUsers(db, entries.map((e) => e.userId));
       return {
         season: info,
+        metric,
         entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [] })),
       };
     }
@@ -509,10 +519,11 @@ export async function buildServer(opts: BuildOpts = {}) {
       if (q.window !== "1d" && q.window !== "7d" && q.window !== "all") {
         return reply.code(400).send({ error: "window must be 1d, 7d, or all" });
       }
-      const entries = windowLeaderboard(db, q.window as LeaderboardWindow);
+      const entries = windowLeaderboard(db, q.window as LeaderboardWindow, undefined, metric);
       const badgeMap = badgesForUsers(db, entries.map((e) => e.userId));
       return {
         window: q.window,
+        metric,
         entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [] })),
       };
     }
