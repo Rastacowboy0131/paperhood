@@ -10,6 +10,7 @@ import { ShareButton } from "@/components/ShareCard";
 import { TokenLogo } from "@/components/TokenLogo";
 import { PortfolioStats } from "@/components/PortfolioStats";
 import { Journal } from "@/components/Journal";
+import { QuestsPanel } from "@/components/QuestsPanel";
 
 function pnlClass(n: number) {
   return n >= 0 ? "text-term-green" : "text-term-red";
@@ -123,8 +124,13 @@ export default function PortfolioPage() {
 
       <PortfolioStats pf={pf} equity={equity} closed={statTrades} />
 
+      <QuestsPanel />
+
       <section>
-        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Badges</h2>
+        <h2 className="mb-2 flex items-baseline gap-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">
+          Badges
+          <Link href="/achievements" className="normal-case tracking-normal text-term-accent hover:underline">All achievements</Link>
+        </h2>
         <BadgeGrid badges={badges} />
       </section>
 
