@@ -31,6 +31,7 @@ interface TokenDetail {
   totalSupply: number | null;
   mcapUsd: number | null;
   imageUrl?: string | null;
+  headerUrl?: string | null;
   website?: string | null;
   twitter?: string | null;
   telegram?: string | null;
@@ -99,6 +100,7 @@ export default function TradePage() {
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [mode, setMode] = useState<"market" | "limit">("market");
   const [copied, setCopied] = useState(false);
+  const [bannerBroken, setBannerBroken] = useState(false);
   const [denom, setDenom] = useDenom();
   const [amountBuy, setAmountBuy] = useState("100");
   const [sellPct, setSellPct] = useState("100");
@@ -376,6 +378,18 @@ export default function TradePage() {
 
   return (
     <div>
+      {/* Token banner from dexscreener header image; hidden when absent or broken */}
+      {detail.headerUrl && !bannerBroken && (
+        <div className="mb-3 h-[72px] w-full overflow-hidden rounded-lg border border-term-line sm:h-[110px] lg:h-[140px]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={detail.headerUrl}
+            alt=""
+            className="h-full w-full object-cover"
+            onError={() => setBannerBroken(true)}
+          />
+        </div>
+      )}
       {/* Token stats strip */}
       <div className="panel mb-3 flex flex-wrap items-center gap-x-1 gap-y-0 divide-x divide-term-line overflow-x-auto px-1 py-1">
         <div className="flex items-center gap-2 px-3 py-1.5">

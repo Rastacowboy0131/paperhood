@@ -25,6 +25,7 @@ type DsPair = {
   volume?: { h24?: number };
   info?: {
     imageUrl?: string;
+    header?: string;
     websites?: { label?: string; url: string }[];
     socials?: { type: string; url: string }[];
   };
@@ -111,8 +112,8 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
   db.prepare(`
     INSERT INTO pools (pair_address, token_address, symbol, name, dex_id, version,
       quote_token, quote_symbol, liquidity_usd, volume24h, active, imported,
-      first_seen, last_seen, image_url, website, twitter, telegram)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?)
+      first_seen, last_seen, image_url, header_url, website, twitter, telegram)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(pair_address) DO UPDATE SET
       active = 1, imported = 1, last_seen = excluded.last_seen,
       liquidity_usd = excluded.liquidity_usd, volume24h = excluded.volume24h
@@ -130,6 +131,7 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
     now,
     now,
     p.info?.imageUrl ?? null,
+    p.info?.header ?? null,
     p.info?.websites?.[0]?.url ?? null,
     socialUrl("twitter"),
     socialUrl("telegram"),

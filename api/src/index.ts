@@ -92,7 +92,7 @@ export async function buildServer(opts: BuildOpts = {}) {
     const price = snap?.price ?? null;
     const priceUsd = price != null && ethUsd != null && pool.quote_symbol === "WETH" ? price * ethUsd : null;
     const totalSupply = (pool as { total_supply?: number | null }).total_supply ?? null;
-    const px = pool as unknown as { image_url?: string | null; website?: string | null; twitter?: string | null; telegram?: string | null };
+    const px = pool as unknown as { image_url?: string | null; header_url?: string | null; website?: string | null; twitter?: string | null; telegram?: string | null };
     return {
       address: pool.token_address,
       symbol: pool.symbol,
@@ -114,6 +114,7 @@ export async function buildServer(opts: BuildOpts = {}) {
       totalSupply,
       mcapUsd: priceUsd != null && totalSupply != null ? priceUsd * totalSupply : null,
       imageUrl: px.image_url ?? null,
+      headerUrl: px.header_url ?? null,
       website: px.website ?? null,
       twitter: px.twitter ?? null,
       telegram: px.telegram ?? null,

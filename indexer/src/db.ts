@@ -88,6 +88,7 @@ for (const col of [
   "supply_ts INTEGER",
   // Token metadata from dexscreener pair info (logo + social links).
   "image_url TEXT",
+  "header_url TEXT",
   "website TEXT",
   "twitter TEXT",
   "telegram TEXT",

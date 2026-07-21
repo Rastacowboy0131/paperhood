@@ -23,6 +23,7 @@ type DsPair = {
   volume?: { h24?: number };
   info?: {
     imageUrl?: string;
+    header?: string;
     websites?: { label?: string; url: string }[];
     socials?: { type: string; url: string }[];
   };
@@ -42,13 +43,14 @@ async function search(q: string): Promise<DsPair[]> {
 const upsert = db.prepare(`
 INSERT INTO pools (pair_address, token_address, symbol, name, dex_id, version,
   quote_token, quote_symbol, liquidity_usd, volume24h, active, first_seen, last_seen,
-  image_url, website, twitter, telegram)
+  image_url, header_url, website, twitter, telegram)
 VALUES (@pair, @token, @symbol, @name, @dex, @version, @quote, @quoteSymbol,
-  @liq, @vol, 1, @now, @now, @imageUrl, @website, @twitter, @telegram)
+  @liq, @vol, 1, @now, @now, @imageUrl, @headerUrl, @website, @twitter, @telegram)
 ON CONFLICT(pair_address) DO UPDATE SET
   symbol=@symbol, name=@name, liquidity_usd=@liq, volume24h=@vol,
   active=1, last_seen=@now,
   image_url=COALESCE(@imageUrl, image_url),
+  header_url=COALESCE(@headerUrl, header_url),
   website=COALESCE(@website, website),
   twitter=COALESCE(@twitter, twitter),
   telegram=COALESCE(@telegram, telegram)
@@ -96,6 +98,7 @@ export async function runDiscovery(): Promise<number> {
         vol: p.volume?.h24 ?? 0,
         now,
         imageUrl: p.info?.imageUrl ?? null,
+        headerUrl: p.info?.header ?? null,
         website: p.info?.websites?.[0]?.url ?? null,
         twitter: socialUrl("twitter"),
         telegram: socialUrl("telegram"),
