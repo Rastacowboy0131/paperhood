@@ -412,6 +412,16 @@ export async function buildServer(opts: BuildOpts = {}) {
       snapshotActiveUsers(db).catch((e) => app.log.error(e, "equity sampler failed"));
     }, eiv);
     equityTimer.unref();
+    // One-time badge backfill: existing trade history earns badges without
+    // waiting for a user's next trade.
+    setImmediate(() => {
+      try {
+        const all = db.prepare("SELECT id FROM users").all() as { id: number }[];
+        for (const u of all) checkBadges(db, u.id);
+      } catch (e) {
+        app.log.error(e, "badge backfill failed");
+      }
+    });
   }
 
   // ---------- leaderboard ----------
