@@ -12,7 +12,9 @@ import { TokenLogo } from "@/components/TokenLogo";
 import { SocialLinks } from "@/components/SocialLinks";
 import { useWatchlist } from "@/lib/watchlist";
 
-type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd" | "priceUsd";
+type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd" | "priceUsd" | "paperHolders";
+
+type Row = TokenRow & { paperHolders?: number };
 
 // Pools below this 24h volume are hidden by default (dead flatline charts).
 const MIN_ACTIVE_VOL = 100;
@@ -20,6 +22,7 @@ const MIN_ACTIVE_VOL = 100;
 export default function Screener() {
   const router = useRouter();
   const [tokens, setTokens] = useState<TokenRow[]>([]);
+  const [paperCounts, setPaperCounts] = useState<Record<string, { holders: number; volumeUsd: number }>>({});
   const [ethUsd, setEthUsd] = useState(0);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -53,6 +56,7 @@ export default function Screener() {
       })
       .catch((e) => setErr(e.message))
       .finally(() => setLoading(false));
+    api.paperCounts().then((r) => setPaperCounts(r.tokens)).catch(() => {});
   }, []);
 
   const addrs = useMemo(() => tokens.map((t) => t.address), [tokens]);
@@ -96,12 +100,13 @@ export default function Screener() {
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = tokens.map((t) => {
+    let list: Row[] = tokens.map((t) => {
+      const paperHolders = paperCounts[t.address.toLowerCase()]?.holders ?? 0;
       const lp = live[t.address.toLowerCase()];
-      if (!lp || lp.price == null) return t;
+      if (!lp || lp.price == null) return { ...t, paperHolders };
       const priceUsd = ethUsd != null ? lp.price * ethUsd : t.priceUsd;
       const mcapUsd = priceUsd != null && t.totalSupply != null ? priceUsd * t.totalSupply : t.mcapUsd;
-      return { ...t, priceQuote: lp.price, priceUsd, mcapUsd };
+      return { ...t, priceQuote: lp.price, priceUsd, mcapUsd, paperHolders };
     });
     if (hideInactive && !watchOnly) {
       list = list.filter((t) => (t.volume24hUsd ?? 0) >= MIN_ACTIVE_VOL);
@@ -127,7 +132,7 @@ export default function Screener() {
       return sortDesc ? -cmp : cmp;
     });
     return list;
-  }, [tokens, live, ethUsd, search, sortKey, sortDesc, hideInactive, stars, watchOnly]);
+  }, [tokens, live, ethUsd, search, sortKey, sortDesc, hideInactive, stars, watchOnly, paperCounts]);
 
   function th(key: SortKey, label: string, right = true) {
     return (
@@ -152,6 +157,7 @@ export default function Screener() {
       <Leaderboard />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
+          id="screener-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search symbol, name, or address"
@@ -212,6 +218,7 @@ export default function Screener() {
               {th("mcapUsd", "MC")}
               {th("liquidityUsd", "Liq")}
               {th("volume24hUsd", "24h Vol")}
+              {th("paperHolders", "Paper")}
               {th("priceUsd", "Price")}
               <th className="th text-right">Pool</th>
               <th className="th w-16 text-right"></th>
@@ -285,6 +292,9 @@ export default function Screener() {
                   </td>
                   <td className="num px-3 py-2 text-right">${fmtCompact(t.liquidityUsd)}</td>
                   <td className="num px-3 py-2 text-right">${fmtCompact(t.volume24hUsd)}</td>
+                  <td className="num px-3 py-2 text-right" title="Paper holders (open paper positions)">
+                    {t.paperHolders ? t.paperHolders : "-"}
+                  </td>
                   <td className="num px-3 py-2 text-right">
                     {t.priceUsd != null ? `$${fmtUsd(t.priceUsd)}` : "-"}
                   </td>
@@ -315,7 +325,7 @@ export default function Screener() {
               ))}
             {!loading && !rows.length && !err && (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-term-dim">
+                <td colSpan={9} className="px-3 py-10 text-center text-term-dim">
                   <div className="text-lg">◎</div>
                   <div className="mt-1 text-xs">{watchOnly ? "No starred tokens yet. Tap the star on any row to watch it." : "No tokens match"}</div>
                 </td>

@@ -321,6 +321,17 @@ export interface PaperTrade {
   ts: number;
 }
 
+// Paper-trading stats for one token (open holders, avg entry, volume).
+export interface TokenPaperStats {
+  token: string;
+  holders: number;
+  avgEntryPriceUsd: number | null;
+  avgEntryMcapUsd: number | null;
+  totalVolumeUsd: number;
+  buys: number;
+  sells: number;
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
@@ -353,6 +364,9 @@ export const api = {
     req<{ explorer: string; holders: Holder[] }>(`/tokens/${addr}/holders`),
   paperTrades: (addr: string) =>
     req<{ trades: PaperTrade[] }>(`/tokens/${addr}/paper-trades`),
+  paperStats: (addr: string) => req<TokenPaperStats>(`/tokens/${addr}/paper-stats`),
+  paperCounts: () =>
+    req<{ tokens: Record<string, { holders: number; volumeUsd: number }> }>("/paper-stats"),
   quote: (body: { tokenIn: string; tokenOut: string; amountIn: string }) =>
     req<QuoteResponse>("/quote", { method: "POST", body: JSON.stringify(body) }),
   trade: (body: { token: string; side: "buy" | "sell"; amount: string | number; note?: string }) =>

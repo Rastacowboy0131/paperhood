@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { api, Candle, Order, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
+import { api, Candle, Order, Portfolio, Position, QuoteResponse, TokenPaperStats, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
 import { CandleChart, ChartLine } from "@/components/CandleChart";
 import { TokenInfoTabs } from "@/components/TokenInfoTabs";
@@ -111,6 +111,7 @@ export default function TradePage() {
   const { address: user } = useAuth();
 
   const [detail, setDetail] = useState<TokenDetail | null>(null);
+  const [paperStats, setPaperStats] = useState<TokenPaperStats | null>(null);
   const [ethUsd, setEthUsd] = useState(0);
   const [tf, setTf] = useState<(typeof TFS)[number]>("5m");
   const [candles, setCandles] = useState<Candle[]>([]);
@@ -224,6 +225,7 @@ export default function TradePage() {
     if (!address) return;
     api.token(address).then((d) => setDetail(d as unknown as TokenDetail)).catch((e) => setErr(e.message));
     api.tokens().then((r) => setEthUsd(r.ethUsd)).catch(() => {});
+    api.paperStats(address).then(setPaperStats).catch(() => {});
   }, [address]);
 
   useEffect(() => {
@@ -630,6 +632,15 @@ export default function TradePage() {
         {statCell("Liquidity", `$${fmtCompact(detail.pool.liquidityUsd)}`)}
         {statCell("24h Vol", `$${fmtCompact(detail.pool.volume24hUsd)}`)}
         {statCell("Pool", `${detail.pool.dex} ${detail.pool.version}`)}
+        {paperStats && paperStats.holders > 0 && statCell("Paper holders", String(paperStats.holders))}
+        {paperStats && paperStats.avgEntryPriceUsd != null &&
+          statCell(
+            "Avg paper entry",
+            paperStats.avgEntryMcapUsd != null
+              ? `${fmtMcap(paperStats.avgEntryMcapUsd)} mc`
+              : `$${fmtUsd(paperStats.avgEntryPriceUsd)}`
+          )}
+        {paperStats && paperStats.totalVolumeUsd > 0 && statCell("Paper vol", `$${fmtCompact(paperStats.totalVolumeUsd)}`)}
       </div>
 
       <div className="grid gap-3 lg:grid-cols-[1fr_340px]">
