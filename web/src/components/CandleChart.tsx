@@ -111,7 +111,14 @@ export function CandleChart({
       seriesRef.current = null;
       priceLinesRef.current = [];
     };
-  }, [compact, height]);
+    // Height changes are applied in a separate effect to avoid full re-creation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compact]);
+
+  // Apply height updates in place (cheap, used by the mobile resize handle).
+  useEffect(() => {
+    chartRef.current?.applyOptions({ height });
+  }, [height]);
 
   useEffect(() => {
     if (!seriesRef.current) return;

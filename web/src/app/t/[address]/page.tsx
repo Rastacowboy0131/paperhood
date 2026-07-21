@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, Candle, Order, Portfolio, Position, QuoteResponse, fmtUsd, fmtCompact, fmtMcap, truncAddr } from "@/lib/api";
@@ -32,6 +32,32 @@ interface TokenDetail {
 }
 
 const TFS = ["1m", "5m", "1h", "1d"] as const;
+
+// Mobile chart/trades split. The combined vertical budget is fixed; dragging
+// the grip trades chart height against the trades box height.
+const MOBILE_SPLIT_TOTAL = 700;
+const MOBILE_CHART_MIN = 200;
+const MOBILE_CHART_MAX = 500;
+const MOBILE_CHART_DEFAULT = 340;
+const MOBILE_SPLIT_KEY = "ph.mobileChartH";
+const DESKTOP_CHART_H = 560;
+
+function clampChartH(v: number): number {
+  return Math.min(Math.max(v, MOBILE_CHART_MIN), MOBILE_CHART_MAX);
+}
+
+// Tracks the lg breakpoint so mobile-only sizing never touches desktop.
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return mobile;
+}
 
 // Quick-buy preset amounts per denomination.
 const BUY_PRESETS: Record<"usd" | "eth", number[]> = {
@@ -82,6 +108,51 @@ export default function TradePage() {
   const [trading, setTrading] = useState(false);
   const [tradeMsg, setTradeMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Mobile-only chart/trades split, persisted across visits.
+  const isMobile = useIsMobile();
+  const [chartH, setChartH] = useState(MOBILE_CHART_DEFAULT);
+  const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = parseInt(localStorage.getItem(MOBILE_SPLIT_KEY) || "", 10);
+      if (Number.isFinite(saved)) setChartH(clampChartH(saved));
+    } catch {}
+  }, []);
+
+  const onDragStart = useCallback((clientY: number) => {
+    dragRef.current = { startY: clientY, startH: chartH };
+  }, [chartH]);
+
+  const onDragMove = useCallback((clientY: number) => {
+    const d = dragRef.current;
+    if (!d) return;
+    setChartH(clampChartH(d.startH + (clientY - d.startY)));
+  }, []);
+
+  const onDragEnd = useCallback(() => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setChartH((h) => {
+      try { localStorage.setItem(MOBILE_SPLIT_KEY, String(h)); } catch {}
+      return h;
+    });
+  }, []);
+
+  useEffect(() => {
+    const move = (e: MouseEvent) => onDragMove(e.clientY);
+    const up = () => onDragEnd();
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+  }, [onDragMove, onDragEnd]);
+
+  const chartHeight = isMobile ? chartH : DESKTOP_CHART_H;
+  const tradesBoxH = MOBILE_SPLIT_TOTAL - chartH;
 
   const live = useLivePrices(useMemo(() => (address ? [address] : []), [address]));
   const livePrice = live[address?.toLowerCase()]?.price;
@@ -377,16 +448,36 @@ export default function TradePage() {
               candles={candles}
               compact={metric === "mcap"}
               lines={chartLines}
-              height={560}
+              height={chartHeight}
               multiplier={
                 (denom === "eth" ? 1 : ethUsd || 1) *
                 (metric === "mcap" ? detail.totalSupply ?? 1 : 1)
               }
             />
           ) : (
-            <div className="flex h-[560px] items-center justify-center text-term-dim">No candle data yet</div>
+            <div style={{ height: chartHeight }} className="flex items-center justify-center text-term-dim">No candle data yet</div>
           )}
         </div>
+
+        {/* Mobile only: drag grip plus a scrollable trades box under the chart. */}
+        {isMobile && (
+          <>
+            <div
+              role="separator"
+              aria-label="Resize chart"
+              className="my-1 flex cursor-row-resize touch-none items-center justify-center py-2 lg:hidden"
+              onMouseDown={(e) => { e.preventDefault(); onDragStart(e.clientY); }}
+              onTouchStart={(e) => onDragStart(e.touches[0].clientY)}
+              onTouchMove={(e) => onDragMove(e.touches[0].clientY)}
+              onTouchEnd={onDragEnd}
+            >
+              <span className="h-1.5 w-12 rounded-full bg-term-border" />
+            </div>
+            <div style={{ height: tradesBoxH }} className="overflow-y-auto lg:hidden">
+              <TokenInfoTabs address={detail.address} symbol={detail.symbol} />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="space-y-3 lg:sticky lg:top-14 lg:self-start">
@@ -710,7 +801,7 @@ export default function TradePage() {
       </div>
       </div>
 
-      <TokenInfoTabs address={detail.address} symbol={detail.symbol} />
+      {!isMobile && <TokenInfoTabs address={detail.address} symbol={detail.symbol} />}
     </div>
   );
 }
