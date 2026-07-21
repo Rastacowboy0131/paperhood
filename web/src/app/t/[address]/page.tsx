@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth";
 import { useDenom, fmtEth } from "@/lib/denom";
 import { useWatchlist } from "@/lib/watchlist";
 import { playBuyFill, playSellFill, playOrderTriggered } from "@/lib/sounds";
+import { TRADE_KEY_EVENT } from "@/components/KeyboardShortcuts";
 
 // Parse a number with optional k/m/b suffix ("2.5M" -> 2500000).
 function parseSuffixed(s: string): number {
@@ -214,6 +215,32 @@ export default function TradePage() {
 
   const chartHeight = isMobile ? chartH : DESKTOP_CHART_H;
   const tradesBoxH = MOBILE_SPLIT_TOTAL - chartH;
+
+  // Keyboard shortcuts: b focuses buy amount, s focuses sell percent.
+  useEffect(() => {
+    const onTradeKey = (e: Event) => {
+      const key = (e as CustomEvent<string>).detail;
+      if (key === "b") {
+        setSide("buy");
+        setMode("market");
+        setTimeout(() => {
+          const el = document.getElementById("trade-buy-amount") as HTMLInputElement | null;
+          el?.focus();
+          el?.select();
+        }, 0);
+      } else if (key === "s") {
+        setSide("sell");
+        setMode("market");
+        setTimeout(() => {
+          const el = document.getElementById("trade-sell-pct") as HTMLInputElement | null;
+          el?.focus();
+          el?.select();
+        }, 0);
+      }
+    };
+    window.addEventListener(TRADE_KEY_EVENT, onTradeKey);
+    return () => window.removeEventListener(TRADE_KEY_EVENT, onTradeKey);
+  }, []);
 
   const live = useLivePrices(useMemo(() => (address ? [address] : []), [address]));
   const livePrice = live[address?.toLowerCase()]?.price;
@@ -808,6 +835,7 @@ export default function TradePage() {
                 </button>
               </span>
               <input
+                id="trade-buy-amount"
                 value={amountBuy}
                 onChange={(e) => setAmountBuy(e.target.value)}
                 inputMode="decimal"
@@ -839,6 +867,7 @@ export default function TradePage() {
                 Sell % of position{position ? ` (${fmtCompact(position.qtyDec)} ${detail.symbol})` : ""}
               </span>
               <input
+                id="trade-sell-pct"
                 value={sellPct}
                 onChange={(e) => setSellPct(e.target.value)}
                 inputMode="decimal"
