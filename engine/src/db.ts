@@ -81,6 +81,29 @@ DELETE FROM trades;
   if (!hasColumn(db, "pools", "fee")) db.exec("ALTER TABLE pools ADD COLUMN fee INTEGER");
   if (!hasColumn(db, "pools", "token0")) db.exec("ALTER TABLE pools ADD COLUMN token0 TEXT");
 
+  // Snapshot/candle tables normally come from the indexer schema; created
+  // here too so imports (which write an instant first snapshot) work against
+  // a db the indexer has not migrated yet (fresh deploys, tests).
+  db.exec(`
+CREATE TABLE IF NOT EXISTS snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pair_address TEXT NOT NULL,
+  ts INTEGER NOT NULL,
+  reserve0 TEXT,
+  reserve1 TEXT,
+  sqrt_price_x96 TEXT,
+  tick INTEGER,
+  liquidity TEXT,
+  price REAL
+);
+CREATE TABLE IF NOT EXISTS candles (
+  pair_address TEXT NOT NULL,
+  minute INTEGER NOT NULL,
+  open REAL, high REAL, low REAL, close REAL, n INTEGER,
+  PRIMARY KEY (pair_address, minute)
+);
+`);
+
   // Token metadata from dexscreener (logo + social links), written by the
   // indexer's discovery pass. Added here too so the engine can run against a
   // db the indexer has not migrated yet.

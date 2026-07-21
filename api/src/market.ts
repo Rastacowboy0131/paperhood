@@ -32,16 +32,19 @@ interface PoolRow {
   imported: number | null;
 }
 
-// Canonical pool per token: deepest active pool.
+// Canonical pool per token: deepest active pool. Token addresses may be
+// stored with mixed case (discovery) or lowercase (import), so grouping and
+// the max-liquidity match are case-insensitive to avoid duplicate rows for
+// the same token.
 export function universePools(db: DatabaseSync): PoolRow[] {
   return db.prepare(`
     SELECT p.* FROM pools p
     WHERE p.active = 1
       AND p.liquidity_usd = (
         SELECT MAX(p2.liquidity_usd) FROM pools p2
-        WHERE p2.token_address = p.token_address AND p2.active = 1
+        WHERE p2.token_address = p.token_address COLLATE NOCASE AND p2.active = 1
       )
-    GROUP BY p.token_address
+    GROUP BY LOWER(p.token_address)
     ORDER BY p.liquidity_usd DESC
   `).all() as unknown as PoolRow[];
 }

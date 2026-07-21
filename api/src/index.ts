@@ -14,7 +14,7 @@ import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../en
 import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
-import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, EXPLORER_URL } from "./tokeninfo.js";
+import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, RateLimitedError, EXPLORER_URL } from "./tokeninfo.js";
 import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
 import { WsHub } from "./ws.js";
 
@@ -159,6 +159,9 @@ export async function buildServer(opts: BuildOpts = {}) {
       const trades = await getPoolTrades(pool.pair_address, pool.token_address);
       return { pair: pool.pair_address, explorer: EXPLORER_URL, trades, topTraders: aggregateTopTraders(trades), windowTrades: trades.length };
     } catch (e) {
+      if (e instanceof RateLimitedError) {
+        return reply.code(429).send({ error: "rate limited by trades provider, retrying shortly" });
+      }
       return reply.code(502).send({ error: `trades unavailable: ${(e as Error).message}` });
     }
   });

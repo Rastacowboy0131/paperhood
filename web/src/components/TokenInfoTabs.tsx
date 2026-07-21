@@ -127,7 +127,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
           trades === null ? (
             <Empty text="Loading trades..." />
           ) : trades.length === 0 ? (
-            <Empty text={tradesErr ? `On-chain trades unavailable (${tradesErr})` : "No recent trades"} />
+            <Empty text={tradesErr ? (tradesErr.includes("rate limited") ? "Rate limited by the trades provider, retrying shortly..." : `On-chain trades unavailable (${tradesErr})`) : "No recent trades"} />
           ) : (
             <table className="num w-full min-w-[560px] text-xs">
               <thead>

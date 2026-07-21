@@ -13,11 +13,17 @@ const HOLDERS_TTL_MS = 60_000;
 
 interface CacheEntry<T> { at: number; data: T }
 const cache = new Map<string, CacheEntry<unknown>>();
+// Upstream 429 backoff: per-key earliest next fetch time.
+const backoffUntil = new Map<string, number>();
 
 function getCached<T>(key: string, ttlMs: number): T | undefined {
   const e = cache.get(key);
   if (e && Date.now() - e.at < ttlMs) return e.data as T;
   return undefined;
+}
+// Stale data is better than an error banner when the upstream rate-limits us.
+function getStale<T>(key: string): T | undefined {
+  return cache.get(key)?.data as T | undefined;
 }
 function setCached(key: string, data: unknown) {
   cache.set(key, { at: Date.now(), data });
@@ -28,11 +34,16 @@ function setCached(key: string, data: unknown) {
   }
 }
 
+export class RateLimitedError extends Error {
+  constructor() { super("rate limited"); }
+}
+
 async function fetchJson<T>(url: string, timeoutMs = 10_000): Promise<T> {
   const res = await fetch(url, {
     signal: AbortSignal.timeout(timeoutMs),
     headers: { accept: "application/json" },
   });
+  if (res.status === 429) throw new RateLimitedError();
   if (!res.ok) throw new Error(`upstream ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -68,9 +79,27 @@ export async function getPoolTrades(pool: string, tokenAddress: string): Promise
   const cached = getCached<PoolTrade[]>(key, TRADES_TTL_MS);
   if (cached) return cached;
 
-  const body = await fetchJson<{ data: { attributes: GeckoTradeAttrs }[] }>(
-    `${GECKO_BASE}/pools/${pool}/trades`
-  );
+  // While backed off after a 429, serve stale data if we have any.
+  const until = backoffUntil.get(key) ?? 0;
+  if (Date.now() < until) {
+    const stale = getStale<PoolTrade[]>(key);
+    if (stale) return stale;
+    throw new RateLimitedError();
+  }
+
+  let body: { data: { attributes: GeckoTradeAttrs }[] };
+  try {
+    body = await fetchJson<{ data: { attributes: GeckoTradeAttrs }[] }>(
+      `${GECKO_BASE}/pools/${pool}/trades`
+    );
+  } catch (e) {
+    if (e instanceof RateLimitedError) {
+      backoffUntil.set(key, Date.now() + 60_000);
+      const stale = getStale<PoolTrade[]>(key);
+      if (stale) return stale;
+    }
+    throw e;
+  }
   const token = tokenAddress.toLowerCase();
   const trades: PoolTrade[] = (body.data || []).map((d) => {
     const a = d.attributes;

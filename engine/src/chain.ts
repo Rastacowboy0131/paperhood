@@ -54,8 +54,13 @@ export const erc20Abi = parseAbi([
 export const v3PoolAbi = parseAbi([
   "function fee() view returns (uint24)",
   "function token0() view returns (address)",
+  "function token1() view returns (address)",
+  "function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+  "function liquidity() view returns (uint128)",
 ]);
 
 export const v2PoolAbi = parseAbi([
   "function token0() view returns (address)",
+  "function token1() view returns (address)",
+  "function getReserves() view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
 ]);

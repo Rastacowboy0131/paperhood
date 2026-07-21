@@ -56,7 +56,10 @@ async function enrichPools(pools: Pool[]): Promise<void> {
   for (let i = 0; i < missing.length; i++) {
     const r0 = tokenResults[i * 2];
     const r1 = tokenResults[i * 2 + 1];
-    if (r0.status !== "success" || r1.status !== "success") continue;
+    if (r0.status !== "success" || r1.status !== "success") {
+      console.warn(`enrich: pool ${missing[i].pair_address} token0/token1 call failed, skipping (bad pair address?)`);
+      continue;
+    }
     resolved.push({
       pool: missing[i],
       t0: (r0.result as string).toLowerCase(),
@@ -74,7 +77,10 @@ async function enrichPools(pools: Pool[]): Promise<void> {
   for (let i = 0; i < resolved.length; i++) {
     const d0r = decResults[i * 2];
     const d1r = decResults[i * 2 + 1];
-    if (d0r.status !== "success" || d1r.status !== "success") continue;
+    if (d0r.status !== "success" || d1r.status !== "success") {
+      console.warn(`enrich: pool ${resolved[i].pool.pair_address} decimals call failed, skipping`);
+      continue;
+    }
     const { pool, t0, t1 } = resolved[i];
     const d0 = Number(d0r.result);
     const d1 = Number(d1r.result);
@@ -99,6 +105,10 @@ export async function pollOnce(): Promise<number> {
 
   await enrichPools(pools);
   const ready = pools.filter((p) => orientation(p) != null);
+  const skipped = pools.filter((p) => orientation(p) == null);
+  if (skipped.length > 0) {
+    console.warn(`poll: ${skipped.length} pools skipped (no orientation): ${skipped.map((p) => `${p.pair_address}`).join(", ")}`);
+  }
   if (ready.length === 0) return 0;
 
   type Call = { address: `0x${string}`; abi: Abi; functionName: string };
@@ -118,13 +128,14 @@ export async function pollOnce(): Promise<number> {
   const minute = ts - (ts % 60);
   let ok = 0;
   let i = 0;
+  const failed: string[] = [];
   db.exec("BEGIN");
   try {
     for (const p of ready) {
       const o = orientation(p)!;
       if (p.version === "v2") {
         const r = results[i++];
-        if (r.status !== "success") continue;
+        if (r.status !== "success") { failed.push(`${p.pair_address}(v2)`); continue; }
         const [r0, r1] = r.result as readonly [bigint, bigint, number];
         const price = v2QuotePerTracked(r0, r1, o);
         insertSnap.run({ pair: p.pair_address, ts, r0: r0.toString(), r1: r1.toString(), sqrt: null, tick: null, liq: null, price });
@@ -133,7 +144,7 @@ export async function pollOnce(): Promise<number> {
       } else {
         const s = results[i++];
         const l = results[i++];
-        if (s.status !== "success" || l.status !== "success") continue;
+        if (s.status !== "success" || l.status !== "success") { failed.push(`${p.pair_address}(v3)`); continue; }
         const slot0 = s.result as readonly [bigint, number, ...unknown[]];
         const sqrt = slot0[0];
         const tick = slot0[1];
@@ -149,6 +160,11 @@ export async function pollOnce(): Promise<number> {
   } catch (e) {
     db.exec("ROLLBACK");
     throw e;
+  }
+  if (failed.length > 0 && failed.length <= 10) {
+    console.warn(`poll: state read failed for ${failed.join(", ")} (wrong version stored?)`);
+  } else if (failed.length > 10) {
+    console.warn(`poll: state read failed for ${failed.length} pools`);
   }
   return ok;
 }

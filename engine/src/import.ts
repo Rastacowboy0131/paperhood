@@ -1,9 +1,12 @@
 // Trade-any-CA: import a robinhood-chain token by contract address.
-// Looks up the token's pairs on dexscreener, validates a priced pair exists,
-// and inserts the deepest usable pool into the shared pools table with
-// imported=1 so discovery never stales it out. The indexer's poll loop picks
-// up active pools automatically, so pricing starts on its next cycle.
+// Looks up the token's pairs on dexscreener, verifies the deepest usable pair
+// on-chain (does it answer slot0 = v3 or getReserves = v2), and inserts it
+// into the shared pools table fully enriched (token0/token1/decimals/fee)
+// with imported=1 so discovery never stales it out. An initial snapshot and
+// candle are written from the on-chain read so quoting and the chart work
+// immediately, without waiting for the indexer's next poll cycle.
 import { DatabaseSync } from "node:sqlite";
+import { client, v2PoolAbi, v3PoolAbi, erc20Abi } from "./chain.js";
 
 const CHAIN_SLUG = "robinhood";
 const DS_TOKENS_URL = "https://api.dexscreener.com/latest/dex/tokens";
@@ -57,6 +60,91 @@ function existingPool(db: DatabaseSync, token: string) {
     | undefined;
 }
 
+// ---------- on-chain verification ----------
+
+interface VerifiedPool {
+  version: "v2" | "v3";
+  token0: string;
+  token1: string;
+  decimals0: number;
+  decimals1: number;
+  fee: number;
+  // v2 state
+  reserve0?: bigint;
+  reserve1?: bigint;
+  // v3 state
+  sqrtPriceX96?: bigint;
+  tick?: number;
+  liquidity?: bigint;
+}
+
+// Verify the pair contract on-chain and read its current state. A pool that
+// answers slot0() is v3; one that answers getReserves() is v2. Dexscreener
+// labels are used only as a hint for which to try first; the chain is the
+// source of truth. Throws ImportError if the contract answers neither.
+async function verifyPoolOnChain(pair: string, labelHint: string): Promise<VerifiedPool> {
+  const addr = pair as `0x${string}`;
+
+  let token0: string;
+  let token1: string;
+  try {
+    [token0, token1] = (await Promise.all([
+      client.readContract({ address: addr, abi: v2PoolAbi, functionName: "token0" }),
+      client.readContract({ address: addr, abi: v2PoolAbi, functionName: "token1" }),
+    ])).map((a) => a.toLowerCase());
+  } catch {
+    throw new ImportError("pair contract does not respond on-chain (not a v2/v3 pool?)", 502);
+  }
+
+  const [decimals0, decimals1] = await Promise.all([
+    client.readContract({ address: token0 as `0x${string}`, abi: erc20Abi, functionName: "decimals" }).then(Number),
+    client.readContract({ address: token1 as `0x${string}`, abi: erc20Abi, functionName: "decimals" }).then(Number),
+  ]).catch(() => {
+    throw new ImportError("pool token decimals unreadable on-chain", 502);
+  });
+
+  const tryV3 = async (): Promise<VerifiedPool | null> => {
+    try {
+      const [slot0, liquidity, fee] = await Promise.all([
+        client.readContract({ address: addr, abi: v3PoolAbi, functionName: "slot0" }),
+        client.readContract({ address: addr, abi: v3PoolAbi, functionName: "liquidity" }),
+        client.readContract({ address: addr, abi: v3PoolAbi, functionName: "fee" }),
+      ]);
+      return {
+        version: "v3", token0, token1, decimals0, decimals1,
+        fee: Number(fee), sqrtPriceX96: slot0[0], tick: Number(slot0[1]), liquidity,
+      };
+    } catch { return null; }
+  };
+  const tryV2 = async (): Promise<VerifiedPool | null> => {
+    try {
+      const [r0, r1] = await client.readContract({ address: addr, abi: v2PoolAbi, functionName: "getReserves" });
+      return { version: "v2", token0, token1, decimals0, decimals1, fee: 3000, reserve0: r0, reserve1: r1 };
+    } catch { return null; }
+  };
+
+  const order = labelHint === "v2" ? [tryV2, tryV3] : [tryV3, tryV2];
+  for (const attempt of order) {
+    const v = await attempt();
+    if (v) return v;
+  }
+  throw new ImportError("pool contract answers neither slot0 (v3) nor getReserves (v2); cannot import", 502);
+}
+
+// Quote tokens per 1 tracked token, decimal adjusted (mirrors indexer price.ts).
+function poolPrice(v: VerifiedPool, tracked: string): number {
+  const trackedIsToken0 = tracked === v.token0;
+  let token1PerToken0: number;
+  if (v.version === "v2") {
+    token1PerToken0 = v.reserve0! === 0n ? 0 : (Number(v.reserve1) / Number(v.reserve0)) * 10 ** (v.decimals0 - v.decimals1);
+  } else {
+    const s = Number(v.sqrtPriceX96) / 2 ** 96;
+    token1PerToken0 = s * s * 10 ** (v.decimals0 - v.decimals1);
+  }
+  if (trackedIsToken0) return token1PerToken0;
+  return token1PerToken0 > 0 ? 1 / token1PerToken0 : 0;
+}
+
 export async function importToken(db: DatabaseSync, address: string): Promise<ImportResult> {
   if (!CA_RE.test(address)) throw new ImportError("invalid contract address (expected 0x + 40 hex chars)");
   const token = address.toLowerCase();
@@ -104,18 +192,31 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
 
   const p = usable[0];
   const liq = p.liquidity?.usd ?? 0;
-  const version = p.labels?.find((l) => /^v[234]$/.test(l)) ?? "v2";
+  const labelHint = p.labels?.find((l) => /^v[234]$/.test(l)) ?? "v2";
+
+  // Verify on-chain before touching the db: confirms the pair exists, fixes
+  // the version if dexscreener labels were missing or wrong, and gives us
+  // everything needed for an instant first snapshot.
+  const v = await verifyPoolOnChain(p.pairAddress, labelHint);
+  const tracked = token;
+  if (tracked !== v.token0 && tracked !== v.token1) {
+    throw new ImportError("pair contract does not contain this token on-chain", 502);
+  }
+
   const socials = p.info?.socials ?? [];
   const socialUrl = (type: string) => socials.find((s) => s.type?.toLowerCase() === type)?.url ?? null;
   const now = Math.floor(Date.now() / 1000);
 
   db.prepare(`
     INSERT INTO pools (pair_address, token_address, symbol, name, dex_id, version,
-      quote_token, quote_symbol, liquidity_usd, volume24h, active, imported,
+      quote_token, quote_symbol, token0, token1, decimals0, decimals1, fee,
+      liquidity_usd, volume24h, active, imported,
       first_seen, last_seen, image_url, header_url, website, twitter, telegram)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(pair_address) DO UPDATE SET
       active = 1, imported = 1, last_seen = excluded.last_seen,
+      version = excluded.version, token0 = excluded.token0, token1 = excluded.token1,
+      decimals0 = excluded.decimals0, decimals1 = excluded.decimals1, fee = excluded.fee,
       liquidity_usd = excluded.liquidity_usd, volume24h = excluded.volume24h
   `).run(
     p.pairAddress,
@@ -123,9 +224,14 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
     p.baseToken.symbol,
     p.baseToken.name,
     p.dexId,
-    version,
+    v.version,
     p.quoteToken.address,
     p.quoteToken.symbol,
+    v.token0,
+    v.token1,
+    v.decimals0,
+    v.decimals1,
+    v.fee,
     liq,
     p.volume?.h24 ?? 0,
     now,
@@ -136,6 +242,26 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
     socialUrl("twitter"),
     socialUrl("telegram"),
   );
+
+  // Instant first snapshot + candle from the on-chain read, so quotes and the
+  // chart work right away instead of "no snapshot" until the next poll.
+  const price = poolPrice(v, tracked);
+  db.prepare(`
+    INSERT INTO snapshots (pair_address, ts, reserve0, reserve1, sqrt_price_x96, tick, liquidity, price)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    p.pairAddress, now,
+    v.reserve0?.toString() ?? null, v.reserve1?.toString() ?? null,
+    v.sqrtPriceX96?.toString() ?? null, v.tick ?? null, v.liquidity?.toString() ?? null,
+    price,
+  );
+  const minute = now - (now % 60);
+  db.prepare(`
+    INSERT INTO candles (pair_address, minute, open, high, low, close, n)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(pair_address, minute) DO UPDATE SET
+      high = MAX(high, excluded.close), low = MIN(low, excluded.close), close = excluded.close, n = n + 1
+  `).run(p.pairAddress, minute, price, price, price, price);
 
   return {
     address: token,
