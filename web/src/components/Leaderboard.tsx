@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { api, LeaderboardEntry, fmtUsd } from "@/lib/api";
 import PrizePoolBanner from "@/components/PrizePoolBanner";
 import { BadgeEmojis } from "@/components/Badges";
+import { ReferralFlair } from "@/components/ReferralFlair";
 
 type Window = "1d" | "7d" | "all";
 type Metric = "equity" | "realized";
@@ -96,8 +98,11 @@ function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
       {entry ? (
         <>
           <div className="num mt-2 text-sm">
-            {entry.display}
+            <Link href={`/u/${entry.address}`} className="hover:text-term-accent hover:underline" title="View trader profile">
+              {entry.display}
+            </Link>
             <BadgeEmojis keys={entry.badges} max={3} />
+            <ReferralFlair flair={entry.referralFlair} />
           </div>
           <div className={`num mt-1 text-lg font-bold ${pnlColor(pnl)}`}>
             {pnlStr(pnl)}
@@ -204,8 +209,11 @@ export default function Leaderboard() {
                 >
                   <span className="num w-6 text-term-dim">{i + 4}</span>
                   <span className="num">
-                    {e.display}
+                    <Link href={`/u/${e.address}`} className="hover:text-term-accent hover:underline" title="View trader profile">
+                      {e.display}
+                    </Link>
                     <BadgeEmojis keys={e.badges} max={3} />
+                    <ReferralFlair flair={e.referralFlair} />
                   </span>
                   <span className={`num ml-auto ${pnlColor(pnl)}`}>
                     {pnlStr(pnl)}
