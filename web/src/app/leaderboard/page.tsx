@@ -8,11 +8,11 @@ import { BadgeEmojis } from "@/components/Badges";
 
 type Period = "1d" | "7d" | "all" | "season";
 
-const TABS: { key: Period; label: string }[] = [
-  { key: "1d", label: "Daily" },
-  { key: "7d", label: "Weekly" },
-  { key: "season", label: "Season" },
-  { key: "all", label: "All time" },
+const TABS: { key: Period; label: string; desc: string }[] = [
+  { key: "1d", label: "Daily", desc: "equity change since 00:00 UTC today" },
+  { key: "7d", label: "Weekly", desc: "equity change since Monday 00:00 UTC" },
+  { key: "season", label: "Season", desc: "equity change vs fresh $10k at season start" },
+  { key: "all", label: "All time", desc: "cumulative equity PnL across all seasons" },
 ];
 
 function seasonRange(s: SeasonInfo): string {
@@ -58,7 +58,9 @@ export default function LeaderboardPage() {
     <div className="mx-auto max-w-3xl">
       <div className="mb-4 flex items-center gap-2">
         <h1 className="text-base font-bold">Leaderboard</h1>
-        <span className="text-[11px] uppercase tracking-wider text-term-dim">realized PnL only</span>
+        <span className="text-[11px] uppercase tracking-wider text-term-dim">
+          {TABS.find((t) => t.key === period)?.desc}
+        </span>
         <div className="tab-track ml-auto">
           {TABS.map((t) => (
             <button
@@ -86,13 +88,14 @@ export default function LeaderboardPage() {
             <tr>
               <th className="th text-left">Rank</th>
               <th className="th text-left">Trader</th>
-              <th className="th text-right">Realized PnL</th>
+              <th className="th text-right">PnL $</th>
               <th className="th text-right">PnL %</th>
               <th className="th text-right">Trades</th>
             </tr>
           </thead>
           <tbody>
             {entries.map((e, i) => {
+              const pnl = e.pnlUsd ?? e.realizedPnlUsd;
               const isMe = me && e.address.toLowerCase() === me;
               return (
                 <tr
@@ -108,8 +111,8 @@ export default function LeaderboardPage() {
                     <BadgeEmojis keys={e.badges} max={3} />
                     {isMe && <span className="ml-2 rounded-full bg-term-accent px-2 text-xs font-medium text-white">you</span>}
                   </td>
-                  <td className={`num px-3 py-2.5 text-right ${e.realizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
-                    {e.realizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(e.realizedPnlUsd, 2)}
+                  <td className={`num px-3 py-2.5 text-right ${pnl >= 0 ? "text-term-green" : "text-term-red"}`}>
+                    {pnl >= 0 ? "+" : "-"}${fmtUsd(Math.abs(pnl), 2)}
                   </td>
                   <td className={`num px-3 py-2.5 text-right ${e.pnlPct >= 0 ? "text-term-green" : "text-term-red"}`}>
                     {e.pnlPct >= 0 ? "+" : ""}
@@ -123,7 +126,7 @@ export default function LeaderboardPage() {
               <tr>
                 <td colSpan={5} className="px-3 py-10 text-center text-term-dim">
                   <div className="text-lg">🏆</div>
-                  <div className="mt-1 text-xs">No closed trades in this window yet.</div>
+                  <div className="mt-1 text-xs">No activity in this window yet.</div>
                 </td>
               </tr>
             )}
@@ -142,21 +145,24 @@ export default function LeaderboardPage() {
                   <span className="text-term-dim">{seasonRange(a.season)}</span>
                 </div>
                 <div className="mt-2 space-y-1">
-                  {a.winners.map((w, i) => (
+                  {a.winners.map((w, i) => {
+                    const wp = w.pnlUsd ?? w.realizedPnlUsd;
+                    return (
                     <div key={w.userId} className="flex items-center gap-2 text-[13px]">
                       <span>{i === 0 ? "\ud83e\udd47" : i === 1 ? "\ud83e\udd48" : "\ud83e\udd49"}</span>
                       <span className="num">{w.display}</span>
                       <BadgeEmojis keys={w.badges} max={3} />
-                      <span className={`num ml-auto ${w.realizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
-                        {w.realizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(w.realizedPnlUsd, 2)}
+                      <span className={`num ml-auto ${wp >= 0 ? "text-term-green" : "text-term-red"}`}>
+                        {wp >= 0 ? "+" : "-"}${fmtUsd(Math.abs(wp), 2)}
                       </span>
                       <span className={`num w-20 text-right text-xs ${w.pnlPct >= 0 ? "text-term-green" : "text-term-red"}`}>
                         {w.pnlPct >= 0 ? "+" : ""}
                         {w.pnlPct.toFixed(2)}%
                       </span>
                     </div>
-                  ))}
-                  {!a.winners.length && <div className="text-xs text-term-dim">No closed trades that season.</div>}
+                    );
+                  })}
+                  {!a.winners.length && <div className="text-xs text-term-dim">No activity that season.</div>}
                 </div>
               </div>
             ))}

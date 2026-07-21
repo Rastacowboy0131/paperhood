@@ -25,6 +25,7 @@ function pnlStr(v: number) {
 
 // Podium card. Order rendered: 2nd, 1st (elevated), 3rd.
 function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3 }) {
+  const pnl = entry ? (entry.pnlUsd ?? entry.realizedPnlUsd) : 0;
   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉";
   const accent =
     rank === 1
@@ -45,8 +46,8 @@ function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
             {entry.display}
             <BadgeEmojis keys={entry.badges} max={3} />
           </div>
-          <div className={`num mt-1 text-lg font-bold ${pnlColor(entry.realizedPnlUsd)}`}>
-            {pnlStr(entry.realizedPnlUsd)}
+          <div className={`num mt-1 text-lg font-bold ${pnlColor(pnl)}`}>
+            {pnlStr(pnl)}
           </div>
           <div className={`num text-xs ${pnlColor(entry.pnlPct)}`}>
             {entry.pnlPct >= 0 ? "+" : ""}
@@ -96,7 +97,7 @@ export default function Leaderboard() {
     <div className="mb-6">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-sm font-bold">Leaderboard</h2>
-        <span className="text-[11px] uppercase tracking-wider text-term-dim">realized PnL</span>
+        <span className="text-[11px] uppercase tracking-wider text-term-dim">equity PnL</span>
         <div className="ml-auto flex gap-1">
           {TABS.map((t) => (
             <button
@@ -124,7 +125,9 @@ export default function Leaderboard() {
           </div>
           {rest.length > 0 && (
             <div className="panel mt-3 overflow-hidden">
-              {rest.map((e, i) => (
+              {rest.map((e, i) => {
+                const pnl = e.pnlUsd ?? e.realizedPnlUsd;
+                return (
                 <div
                   key={e.userId}
                   className="flex items-center gap-3 border-t border-term-line px-3 py-2 text-[13px] transition-colors first:border-t-0 hover:bg-term-hover"
@@ -134,8 +137,8 @@ export default function Leaderboard() {
                     {e.display}
                     <BadgeEmojis keys={e.badges} max={3} />
                   </span>
-                  <span className={`num ml-auto ${pnlColor(e.realizedPnlUsd)}`}>
-                    {pnlStr(e.realizedPnlUsd)}
+                  <span className={`num ml-auto ${pnlColor(pnl)}`}>
+                    {pnlStr(pnl)}
                   </span>
                   <span className={`num w-20 text-right text-xs ${pnlColor(e.pnlPct)}`}>
                     {e.pnlPct >= 0 ? "+" : ""}
@@ -143,14 +146,15 @@ export default function Leaderboard() {
                   </span>
                   <span className="num w-16 text-right text-xs text-term-dim">{e.trades} tr</span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </>
       ) : (
         <div className="panel px-3 py-8 text-center text-term-dim">
           <div className="text-lg">🏆</div>
-          <div className="mt-1 text-xs">No closed trades in this window yet. Be the first on the podium.</div>
+          <div className="mt-1 text-xs">No activity in this window yet. Be the first on the podium.</div>
         </div>
       )}
     </div>

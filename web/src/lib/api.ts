@@ -133,7 +133,8 @@ export interface LeaderboardEntry {
   userId: number;
   address: string;
   display: string;
-  realizedPnlUsd: number;
+  pnlUsd: number;
+  realizedPnlUsd: number; // legacy alias of pnlUsd
   pnlPct: number;
   trades: number;
   badges?: string[];
