@@ -378,18 +378,6 @@ export default function TradePage() {
 
   return (
     <div>
-      {/* Token banner from dexscreener header image; hidden when absent or broken */}
-      {detail.headerUrl && !bannerBroken && (
-        <div className="mb-3 h-[110px] w-full overflow-hidden rounded-lg border border-term-line sm:h-[170px] lg:h-[220px]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={detail.headerUrl}
-            alt=""
-            className="h-full w-full object-cover"
-            onError={() => setBannerBroken(true)}
-          />
-        </div>
-      )}
       {/* Token stats strip */}
       <div className="panel mb-3 flex flex-wrap items-center gap-x-1 gap-y-0 divide-x divide-term-line overflow-x-auto px-1 py-1">
         <div className="flex items-center gap-2 px-3 py-1.5">
@@ -560,6 +548,18 @@ export default function TradePage() {
       </div>
 
       <div className="space-y-3 lg:sticky lg:top-14 lg:self-start">
+        {/* Token banner from dexscreener header image; 1500x500 (3:1) like dexscreener, above the trade widget */}
+        {detail.headerUrl && !bannerBroken && (
+          <div className="aspect-[3/1] w-full overflow-hidden rounded-lg border border-term-line">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={detail.headerUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setBannerBroken(true)}
+            />
+          </div>
+        )}
         <div className="panel p-4">
           <div className="mb-2 flex gap-1">
             <button
