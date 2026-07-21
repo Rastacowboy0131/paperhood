@@ -114,10 +114,12 @@ export default function LeaderboardPage() {
             {entries.map((e, i) => {
               const pnl = e.pnlUsd ?? e.realizedPnlUsd;
               const isMe = me && e.address.toLowerCase() === me;
+              const rowFlair =
+                i === 0 ? "podium-gold" : i === 1 ? "podium-silver" : i === 2 ? "podium-bronze" : "";
               return (
                 <tr
                   key={e.userId}
-                  className={`border-t border-term-line transition-colors hover:bg-term-hover ${isMe ? "bg-term-accent/10" : ""}`}
+                  className={`border-t border-term-line transition-colors hover:bg-term-hover ${rowFlair} ${isMe ? "bg-term-accent/10" : ""}`}
                 >
                   <td className="num px-3 py-2.5">
                     {i + 1}

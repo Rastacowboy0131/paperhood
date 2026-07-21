@@ -103,6 +103,98 @@ body {
   }
 }
 
+/* ---------- Podium flair (leaderboard top-3 cards) ---------- */
+
+.podium-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.podium-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+.podium-gold {
+  border-color: rgb(250 204 21 / 0.6);
+  background: linear-gradient(160deg, rgb(254 249 195 / 0.9), rgb(253 224 71 / 0.25), rgb(254 249 195 / 0.6));
+}
+html.dark .podium-gold {
+  border-color: rgb(234 179 8 / 0.45);
+  background: linear-gradient(160deg, rgb(113 88 10 / 0.35), rgb(66 51 8 / 0.25), rgb(113 88 10 / 0.2));
+}
+.podium-silver {
+  border-color: rgb(148 163 184 / 0.6);
+  background: linear-gradient(160deg, rgb(241 245 249), rgb(203 213 225 / 0.35), rgb(241 245 249 / 0.7));
+}
+html.dark .podium-silver {
+  border-color: rgb(148 163 184 / 0.35);
+  background: linear-gradient(160deg, rgb(71 85 105 / 0.3), rgb(51 65 85 / 0.2), rgb(71 85 105 / 0.15));
+}
+.podium-bronze {
+  border-color: rgb(251 146 60 / 0.55);
+  background: linear-gradient(160deg, rgb(255 237 213 / 0.9), rgb(253 186 116 / 0.25), rgb(255 237 213 / 0.6));
+}
+html.dark .podium-bronze {
+  border-color: rgb(194 120 51 / 0.45);
+  background: linear-gradient(160deg, rgb(124 66 20 / 0.35), rgb(77 42 14 / 0.25), rgb(124 66 20 / 0.2));
+}
+
+/* Diagonal shine sweep across the #1 card. */
+.podium-shine::after {
+  content: "";
+  position: absolute;
+  inset: -60% auto -60% -80%;
+  width: 45%;
+  background: linear-gradient(105deg, transparent, rgb(255 255 255 / 0.45), transparent);
+  transform: skewX(-20deg);
+  animation: podium-sweep 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+html.dark .podium-shine::after {
+  background: linear-gradient(105deg, transparent, rgb(255 255 255 / 0.14), transparent);
+}
+@keyframes podium-sweep {
+  0% { left: -80%; }
+  55% { left: 130%; }
+  100% { left: 130%; }
+}
+
+/* Tiny CSS confetti dots floating up inside the #1 card. */
+.podium-confetti span {
+  position: absolute;
+  bottom: -6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
+  opacity: 0;
+  animation: confetti-rise 3.6s linear infinite;
+  pointer-events: none;
+}
+@keyframes confetti-rise {
+  0% { opacity: 0; transform: translateY(0) rotate(0deg); }
+  12% { opacity: 0.9; }
+  100% { opacity: 0; transform: translateY(-130px) rotate(320deg); }
+}
+
+/* Gentle bob for the crown on #1. */
+.podium-crown {
+  animation: crown-bob 2.6s ease-in-out infinite;
+}
+@keyframes crown-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .podium-shine::after,
+  .podium-confetti span,
+  .podium-crown {
+    animation: none;
+  }
+  .podium-confetti span { display: none; }
+  .podium-card:hover { transform: none; }
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

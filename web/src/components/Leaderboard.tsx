@@ -25,23 +25,74 @@ function pnlStr(v: number) {
   return `${v >= 0 ? "+" : "-"}$${fmtUsd(Math.abs(v), 2)}`;
 }
 
+// Inline rank art: crown for #1, trophies for #2/#3. No external assets.
+function RankArt({ rank }: { rank: 1 | 2 | 3 }) {
+  if (rank === 1) {
+    return (
+      <svg viewBox="0 0 48 36" className="podium-crown h-9 w-12" aria-hidden="true">
+        <path
+          d="M6 28 L3 10 L14 18 L24 5 L34 18 L45 10 L42 28 Z"
+          fill="#facc15" stroke="#ca8a04" strokeWidth="1.5" strokeLinejoin="round"
+        />
+        <rect x="6" y="28" width="36" height="4" rx="1.5" fill="#eab308" stroke="#ca8a04" strokeWidth="1" />
+        <circle cx="24" cy="14" r="2.2" fill="#fef9c3" />
+        <circle cx="12" cy="20" r="1.6" fill="#fef9c3" />
+        <circle cx="36" cy="20" r="1.6" fill="#fef9c3" />
+      </svg>
+    );
+  }
+  const main = rank === 2 ? "#cbd5e1" : "#fdba74";
+  const edge = rank === 2 ? "#64748b" : "#c2410c";
+  return (
+    <svg viewBox="0 0 40 40" className="h-8 w-8" aria-hidden="true">
+      <path
+        d="M12 6 h16 v10 a8 8 0 0 1 -16 0 Z"
+        fill={main} stroke={edge} strokeWidth="1.5" strokeLinejoin="round"
+      />
+      <path d="M12 8 H6 a6 6 0 0 0 6 8 M28 8 h6 a6 6 0 0 1 -6 8" fill="none" stroke={edge} strokeWidth="1.5" />
+      <rect x="17" y="23" width="6" height="6" fill={main} stroke={edge} strokeWidth="1" />
+      <rect x="12" y="29" width="16" height="4" rx="1" fill={main} stroke={edge} strokeWidth="1" />
+      <text x="20" y="15.5" textAnchor="middle" fontSize="9" fontWeight="bold" fill={edge}>{rank}</text>
+    </svg>
+  );
+}
+
+const CONFETTI_COLORS = ["#facc15", "#22c55e", "#3b82f6", "#ec4899", "#f97316", "#a855f7"];
+
+function Confetti() {
+  return (
+    <div className="podium-confetti absolute inset-0" aria-hidden="true">
+      {CONFETTI_COLORS.map((c, i) => (
+        <span
+          key={i}
+          style={{
+            left: `${8 + i * 15}%`,
+            background: c,
+            animationDelay: `${i * 0.55}s`,
+            animationDuration: `${3 + (i % 3) * 0.7}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 // Podium card. Order rendered: 2nd, 1st (elevated), 3rd.
 function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3 }) {
   const pnl = entry ? (entry.pnlUsd ?? entry.realizedPnlUsd) : 0;
-  const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉";
-  const accent =
-    rank === 1
-      ? "border-yellow-300 bg-yellow-50 dark:border-yellow-500/40 dark:bg-yellow-500/10"
-      : rank === 2
-        ? "border-term-border bg-term-raised"
-        : "border-orange-200 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/10";
+  const medal = rank === 1 ? "\u{1F947}" : rank === 2 ? "\u{1F948}" : "\u{1F949}";
+  const flair = rank === 1 ? "podium-gold podium-shine" : rank === 2 ? "podium-silver" : "podium-bronze";
   const elevate = rank === 1 ? "sm:-translate-y-3 sm:scale-105" : "";
   return (
     <div
-      className={`flex flex-1 flex-col items-center rounded-xl border ${accent} px-4 py-4 shadow-sm transition-transform ${elevate}`}
+      className={`podium-card flex flex-1 flex-col items-center rounded-xl border ${flair} px-4 py-4 shadow-sm ${elevate}`}
     >
-      <div className="text-2xl">{medal}</div>
-      <div className="mt-0.5 text-[11px] uppercase tracking-wider text-term-dim">#{rank}</div>
+      {rank === 1 && entry && <Confetti />}
+      <RankArt rank={rank} />
+      <div className="mt-1 flex items-center gap-1 text-[11px] uppercase tracking-wider text-term-dim">
+        <span>{medal}</span>
+        <span>#{rank}</span>
+      </div>
       {entry ? (
         <>
           <div className="num mt-2 text-sm">
@@ -100,6 +151,8 @@ export default function Leaderboard() {
 
   return (
     <div className="mb-6">
+      <PrizePoolBanner window={win} />
+
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-sm font-bold">Leaderboard</h2>
         <span className="text-[11px] uppercase tracking-wider text-term-dim">{metric} PnL</span>
@@ -132,8 +185,6 @@ export default function Leaderboard() {
           </button>
         ))}
       </div>
-
-      <PrizePoolBanner window={win} />
 
       {entries.length ? (
         <>
