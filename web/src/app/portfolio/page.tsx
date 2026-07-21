@@ -8,6 +8,7 @@ import { EquityChart } from "@/components/EquityChart";
 import { BadgeGrid } from "@/components/Badges";
 import { ShareButton } from "@/components/ShareCard";
 import { TokenLogo } from "@/components/TokenLogo";
+import { PortfolioStats } from "@/components/PortfolioStats";
 
 function pnlClass(n: number) {
   return n >= 0 ? "text-term-green" : "text-term-red";
@@ -24,6 +25,7 @@ export default function PortfolioPage() {
   const [equity, setEquity] = useState<EquityPoint[]>([]);
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [closed, setClosed] = useState<{ trades: ClosedTrade[]; total: number } | null>(null);
+  const [statTrades, setStatTrades] = useState<ClosedTrade[]>([]);
   const [closedPage, setClosedPage] = useState(1);
   const CLOSED_PAGE_SIZE = 20;
 
@@ -40,6 +42,12 @@ export default function PortfolioPage() {
       .then((r) => setClosed({ trades: r.trades, total: r.total }))
       .catch(() => {});
   }, [address, closedPage]);
+
+  useEffect(() => {
+    if (!address) return;
+    // Bigger page for the stats panel (win rate over recent history).
+    api.closedTrades(1, 100).then((r) => setStatTrades(r.trades)).catch(() => {});
+  }, [address]);
 
   useEffect(() => {
     refresh();
@@ -111,6 +119,8 @@ export default function PortfolioPage() {
           )}
         </div>
       </section>
+
+      <PortfolioStats pf={pf} equity={equity} closed={statTrades} />
 
       <section>
         <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Badges</h2>
