@@ -130,6 +130,50 @@ export interface LeaderboardEntry {
   realizedPnlUsd: number;
   pnlPct: number;
   trades: number;
+  badges?: string[];
+}
+
+export interface BadgeDef {
+  key: string;
+  label: string;
+  emoji: string;
+  desc: string;
+}
+
+export interface UserBadge extends BadgeDef {
+  earnedAt: number;
+}
+
+export interface SeasonInfo {
+  id: number;
+  num: number;
+  startTs: number;
+  endTs: number;
+}
+
+export interface SeasonsResponse {
+  current: SeasonInfo | null;
+  badgeDefs: BadgeDef[];
+  archive: { season: SeasonInfo; winners: LeaderboardEntry[] }[];
+  all: SeasonInfo[];
+}
+
+export interface ClosedTrade {
+  id: number;
+  token: string;
+  symbol: string;
+  qtyDec: number;
+  entryPriceUsd: number | null;
+  exitPriceUsd: number;
+  proceedsUsd: number;
+  realizedPnlUsd: number | null;
+  pnlPct: number | null;
+  ts: number;
+}
+
+export interface EquityPoint {
+  ts: number;
+  equityUsd: number;
 }
 
 export interface PrizePool {
@@ -225,6 +269,15 @@ export const api = {
     req<{ period: string; entries: LeaderboardEntry[] }>(`/leaderboard?period=${period}`),
   leaderboardWindow: (window: "1d" | "7d" | "all") =>
     req<{ window: string; entries: LeaderboardEntry[] }>(`/leaderboard?window=${window}`),
+  leaderboardSeason: (season: number | "current") =>
+    req<{ season: SeasonInfo; entries: LeaderboardEntry[] }>(`/leaderboard?season=${season}`),
+  seasons: () => req<SeasonsResponse>("/seasons"),
+  closedTrades: (page = 1, pageSize = 20) =>
+    req<{ page: number; pageSize: number; total: number; trades: ClosedTrade[] }>(
+      `/portfolio/closed?page=${page}&pageSize=${pageSize}`
+    ),
+  equityCurve: () => req<{ seasonId: number; points: EquityPoint[] }>("/portfolio/equity"),
+  myBadges: () => req<{ defs: BadgeDef[]; badges: UserBadge[] }>("/badges/me"),
   prizePool: () =>
     req<PrizePool>("/prizepool"),
   nonce: () => req<{ nonce: string; expiresInS: number }>("/auth/nonce"),
