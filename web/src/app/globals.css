@@ -185,6 +185,15 @@ html.dark .podium-shine::after {
   50% { transform: translateY(-3px); }
 }
 
+/* Leaderboard table top-3 row tints. Plain backgrounds only: gradient
+   backgrounds on tr break row rendering in some browsers. */
+.row-gold { background-color: rgb(250 204 21 / 0.12); }
+.row-silver { background-color: rgb(148 163 184 / 0.12); }
+.row-bronze { background-color: rgb(251 146 60 / 0.12); }
+html.dark .row-gold { background-color: rgb(234 179 8 / 0.1); }
+html.dark .row-silver { background-color: rgb(148 163 184 / 0.08); }
+html.dark .row-bronze { background-color: rgb(194 120 51 / 0.1); }
+
 @media (prefers-reduced-motion: reduce) {
   .podium-shine::after,
   .podium-confetti span,

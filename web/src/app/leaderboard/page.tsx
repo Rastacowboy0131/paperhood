@@ -115,7 +115,7 @@ export default function LeaderboardPage() {
               const pnl = e.pnlUsd ?? e.realizedPnlUsd;
               const isMe = me && e.address.toLowerCase() === me;
               const rowFlair =
-                i === 0 ? "podium-gold" : i === 1 ? "podium-silver" : i === 2 ? "podium-bronze" : "";
+                i === 0 ? "row-gold" : i === 1 ? "row-silver" : i === 2 ? "row-bronze" : "";
               return (
                 <tr
                   key={e.userId}
