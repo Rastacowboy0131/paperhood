@@ -284,6 +284,8 @@ export const api = {
   createOrder: (body: { token: string; side: "buy" | "sell"; type: "limit" | "stop"; triggerPrice: number; amount: number }) =>
     req<{ order: Order }>("/orders", { method: "POST", body: JSON.stringify(body) }),
   cancelOrder: (id: number) => req<{ ok: boolean }>(`/orders/${id}`, { method: "DELETE" }),
+  updateOrder: (id: number, body: { triggerPrice: number }) =>
+    req<{ order: Order }>(`/orders/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   leaderboard: (period: "daily" | "weekly") =>
     req<{ period: string; entries: LeaderboardEntry[] }>(`/leaderboard?period=${period}`),
   leaderboardWindow: (window: "1d" | "7d" | "all") =>

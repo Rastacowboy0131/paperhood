@@ -94,6 +94,18 @@ export function listOrders(db: DatabaseSync, userId: number, token?: string, lim
   ).all(userId, limit) as unknown as OrderRow[];
 }
 
+// Update the trigger price of an own open order (used by chart line drags).
+// Returns the updated row, or undefined if not found / not open / not owned.
+export function updateOrderTrigger(db: DatabaseSync, userId: number, id: number, triggerPrice: number): OrderRow | undefined {
+  ensureOrdersTable(db);
+  if (!(triggerPrice > 0)) throw new Error("triggerPrice must be positive");
+  const res = db.prepare(
+    "UPDATE orders SET trigger_price = ? WHERE id = ? AND user_id = ? AND status = 'open'"
+  ).run(triggerPrice, id, userId);
+  if (Number(res.changes) === 0) return undefined;
+  return getOrder(db, id);
+}
+
 // Cancel an own open order. Returns false if not found / not open / not owned.
 export function cancelOrder(db: DatabaseSync, userId: number, id: number): boolean {
   ensureOrdersTable(db);

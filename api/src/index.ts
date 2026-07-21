@@ -8,7 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { openDb } from "../../engine/src/db.js";
 import { quoteSwap, getTokenMeta } from "../../engine/src/quote.js";
 import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd, seasonInfo, listSeasons } from "../../engine/src/ledger.js";
-import { createOrder, listOrders, cancelOrder, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
+import { createOrder, listOrders, cancelOrder, updateOrderTrigger, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
 import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, seasonLeaderboard, seasonArchive, LeaderboardWindow } from "../../engine/src/leaderboard.js";
 import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../engine/src/badges.js";
 import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
@@ -438,6 +438,23 @@ export async function buildServer(opts: BuildOpts = {}) {
     const ok = cancelOrder(db, user.userId, id);
     if (!ok) return reply.code(404).send({ error: "order not found or not open" });
     return { ok: true };
+  });
+
+  // Adjust the trigger price of an open order (chart line drag).
+  app.patch("/orders/:id", { ...tradeLimit, preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "invalid order id" });
+    const body = req.body as { triggerPrice?: number };
+    const trigger = Number(body?.triggerPrice);
+    if (!Number.isFinite(trigger) || trigger <= 0) return reply.code(400).send({ error: "triggerPrice must be a positive number" });
+    try {
+      const o = updateOrderTrigger(db, user.userId, id, trigger);
+      if (!o) return reply.code(404).send({ error: "order not found or not open" });
+      return { order: serializeOrder(o) };
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
   });
 
   // Order execution loop: check open orders against fresh snapshot prices.
