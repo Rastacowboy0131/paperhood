@@ -17,11 +17,15 @@ export interface LeaderboardEntry {
   userId: number;
   address: string;
   display: string; // truncated address, e.g. 0x1234...abcd
-  pnlUsd: number; // equity change over the window
+  pnlUsd: number; // PnL over the window (equity change or realized, per metric)
   realizedPnlUsd: number; // kept as an alias of pnlUsd for older clients
-  pnlPct: number; // equity change as % of the window baseline
+  pnlPct: number; // PnL as % of the window baseline
   trades: number; // trades executed inside the window
 }
+
+// Ranking metric: equity = mark-to-market equity change (default),
+// realized = FIFO realized PnL from closed sells only.
+export type LeaderboardMetric = "equity" | "realized";
 
 function usersInSeason(db: DatabaseSync, seasonId: number): { id: number; address: string }[] {
   return db.prepare(
@@ -81,6 +85,27 @@ function tradesInWindow(db: DatabaseSync, userId: number, seasonId: number, sinc
 
 // Core ranking: equity change from windowStart to now for every user with
 // trades in the season. windowStart <= seasonStart means "full season".
+// Realized-only ranking: FIFO realized PnL from sells inside the window.
+function rankByRealized(db: DatabaseSync, seasonId: number, windowStart: number): LeaderboardEntry[] {
+  const entries: LeaderboardEntry[] = [];
+  for (const u of usersInSeason(db, seasonId)) {
+    const pnl = realizedPnl(db, u.id, seasonId, windowStart);
+    const trades = tradesInWindow(db, u.id, seasonId, windowStart);
+    if (trades === 0 && pnl === 0) continue;
+    entries.push({
+      userId: u.id,
+      address: u.address,
+      display: truncateAddress(u.address),
+      pnlUsd: pnl,
+      realizedPnlUsd: pnl,
+      pnlPct: (pnl / STARTING_BALANCE_USD) * 100,
+      trades,
+    });
+  }
+  entries.sort((a, b) => b.pnlPct - a.pnlPct);
+  return entries;
+}
+
 function rankByEquity(db: DatabaseSync, seasonId: number, windowStart: number): LeaderboardEntry[] {
   const season = db.prepare("SELECT start_ts FROM seasons WHERE id = ?").get(seasonId) as { start_ts: number } | undefined;
   const seasonStart = season?.start_ts ?? 0;
@@ -129,16 +154,18 @@ function utcWeekStart(nowSec: number): number {
   return dayStart - ((dow + 6) % 7) * 86400;
 }
 
-// Daily: equity change since 00:00 UTC today (or season start if newer).
-export function dailyLeaderboard(db: DatabaseSync, nowSec: number = Math.floor(Date.now() / 1000)): LeaderboardEntry[] {
+// Daily: PnL since 00:00 UTC today (or season start if newer).
+export function dailyLeaderboard(db: DatabaseSync, nowSec: number = Math.floor(Date.now() / 1000), metric: LeaderboardMetric = "equity"): LeaderboardEntry[] {
   const seasonId = getSeasonId(db, nowSec);
-  return rankByEquity(db, seasonId, utcDayStart(nowSec));
+  const rank = metric === "realized" ? rankByRealized : rankByEquity;
+  return rank(db, seasonId, utcDayStart(nowSec));
 }
 
-// Weekly: equity change since Monday 00:00 UTC (or season start if newer).
-export function weeklyLeaderboard(db: DatabaseSync, nowSec: number = Math.floor(Date.now() / 1000)): LeaderboardEntry[] {
+// Weekly: PnL since Monday 00:00 UTC (or season start if newer).
+export function weeklyLeaderboard(db: DatabaseSync, nowSec: number = Math.floor(Date.now() / 1000), metric: LeaderboardMetric = "equity"): LeaderboardEntry[] {
   const seasonId = getSeasonId(db, nowSec);
-  return rankByEquity(db, seasonId, utcWeekStart(nowSec));
+  const rank = metric === "realized" ? rankByRealized : rankByEquity;
+  return rank(db, seasonId, utcWeekStart(nowSec));
 }
 
 // ---------- windowed leaderboard (main page podium + leaderboard tabs) ----------
@@ -150,16 +177,17 @@ export type LeaderboardWindow = "1d" | "7d" | "all";
 export function windowLeaderboard(
   db: DatabaseSync,
   window: LeaderboardWindow,
-  nowSec: number = Math.floor(Date.now() / 1000)
+  nowSec: number = Math.floor(Date.now() / 1000),
+  metric: LeaderboardMetric = "equity"
 ): LeaderboardEntry[] {
-  if (window === "1d") return dailyLeaderboard(db, nowSec);
-  if (window === "7d") return weeklyLeaderboard(db, nowSec);
-  return allTimeLeaderboard(db, nowSec);
+  if (window === "1d") return dailyLeaderboard(db, nowSec, metric);
+  if (window === "7d") return weeklyLeaderboard(db, nowSec, metric);
+  return allTimeLeaderboard(db, nowSec, metric);
 }
 
 // All time: sum of per-season equity PnL (each season starts fresh at 10k).
 // Percentage is relative to a single 10k stake for readability.
-export function allTimeLeaderboard(db: DatabaseSync, _nowSec: number = Math.floor(Date.now() / 1000)): LeaderboardEntry[] {
+export function allTimeLeaderboard(db: DatabaseSync, _nowSec: number = Math.floor(Date.now() / 1000), metric: LeaderboardMetric = "equity"): LeaderboardEntry[] {
   const users = db.prepare(
     `SELECT u.id, u.address FROM users u
      WHERE EXISTS (SELECT 1 FROM trades t WHERE t.user_id = u.id)`
@@ -170,11 +198,14 @@ export function allTimeLeaderboard(db: DatabaseSync, _nowSec: number = Math.floo
     const seasons = db.prepare(
       "SELECT DISTINCT season_id FROM trades WHERE user_id = ?"
     ).all(u.id) as { season_id: number }[];
-    // Per season: final (or latest) equity minus the fresh 10k start.
-    // latestEquity falls back to starting balance + realized PnL for
-    // pre-snapshot history.
+    // Per season: final (or latest) equity minus the fresh 10k start,
+    // or realized-only when the realized metric is selected.
     let pnl = 0;
-    for (const s of seasons) pnl += latestEquity(db, u.id, s.season_id) - STARTING_BALANCE_USD;
+    for (const s of seasons) {
+      pnl += metric === "realized"
+        ? realizedPnl(db, u.id, s.season_id)
+        : latestEquity(db, u.id, s.season_id) - STARTING_BALANCE_USD;
+    }
     const trades = (db.prepare(
       "SELECT COUNT(*) AS c FROM trades WHERE user_id = ?"
     ).get(u.id) as { c: number }).c;
@@ -195,9 +226,11 @@ export function allTimeLeaderboard(db: DatabaseSync, _nowSec: number = Math.floo
 
 // ---------- season leaderboard and archive ----------
 
-// Full-season ranking: equity change vs the fresh $10k season start.
-export function seasonLeaderboard(db: DatabaseSync, seasonId: number): LeaderboardEntry[] {
-  return rankByEquity(db, seasonId, 0);
+// Full-season ranking: equity change vs the fresh $10k season start,
+// or realized-only when the realized metric is selected.
+export function seasonLeaderboard(db: DatabaseSync, seasonId: number, metric: LeaderboardMetric = "equity"): LeaderboardEntry[] {
+  const rank = metric === "realized" ? rankByRealized : rankByEquity;
+  return rank(db, seasonId, 0);
 }
 
 export interface SeasonArchiveEntry {

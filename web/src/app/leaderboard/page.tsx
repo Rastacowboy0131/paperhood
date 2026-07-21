@@ -24,6 +24,7 @@ function seasonRange(s: SeasonInfo): string {
 export default function LeaderboardPage() {
   const { address } = useAuth();
   const [period, setPeriod] = useState<Period>("1d");
+  const [metric, setMetric] = useState<"equity" | "realized">("equity");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [seasons, setSeasons] = useState<SeasonsResponse | null>(null);
@@ -37,20 +38,20 @@ export default function LeaderboardPage() {
     const load = () => {
       if (period === "season") {
         return api
-          .leaderboardSeason("current")
+          .leaderboardSeason("current", metric)
           .then((r) => {
             setEntries(r.entries);
             setSeason(r.season);
           });
       }
-      return api.leaderboardWindow(period).then((r) => setEntries(r.entries));
+      return api.leaderboardWindow(period, metric).then((r) => setEntries(r.entries));
     };
     load().catch((e) => setErr(e.message));
     const id = setInterval(() => {
       load().catch(() => {});
     }, 20000);
     return () => clearInterval(id);
-  }, [period]);
+  }, [period, metric]);
 
   const me = address?.toLowerCase();
 
@@ -62,6 +63,22 @@ export default function LeaderboardPage() {
           {TABS.find((t) => t.key === period)?.desc}
         </span>
         <div className="tab-track ml-auto">
+          {(
+            [
+              { key: "equity", label: "Equity" },
+              { key: "realized", label: "Realized" },
+            ] as const
+          ).map((m) => (
+            <button
+              key={m.key}
+              onClick={() => setMetric(m.key)}
+              className={`tab ${metric === m.key ? "tab-active" : ""}`}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className="tab-track">
           {TABS.map((t) => (
             <button
               key={t.key}
