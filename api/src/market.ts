@@ -19,6 +19,7 @@ export interface TokenListItem {
   website: string | null;
   twitter: string | null;
   telegram: string | null;
+  imported: boolean;
 }
 
 interface PoolRow {
@@ -28,6 +29,7 @@ interface PoolRow {
   total_supply: number | null; supply_ts: number | null;
   image_url: string | null; website: string | null;
   twitter: string | null; telegram: string | null;
+  imported: number | null;
 }
 
 // Canonical pool per token: deepest active pool.
@@ -97,6 +99,7 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
       website: p.website ?? null,
       twitter: p.twitter ?? null,
       telegram: p.telegram ?? null,
+      imported: !!p.imported,
     });
   }
   return out;

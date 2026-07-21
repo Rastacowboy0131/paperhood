@@ -27,6 +27,7 @@ export interface TokenRow {
   website?: string | null;
   twitter?: string | null;
   telegram?: string | null;
+  imported?: boolean;
 }
 
 export interface TokensResponse {
@@ -192,6 +193,17 @@ export interface Me {
   user: { userId: number; address: string; createdAt?: string } | null;
 }
 
+// POST /tokens/import response.
+export interface ImportResult {
+  address: string;
+  symbol: string;
+  name: string;
+  pair: string;
+  liquidityUsd: number;
+  thinLiquidity: boolean;
+  alreadyTracked: boolean;
+}
+
 // Token info panel payloads (/tokens/:address/trades, /holders, /paper-trades).
 export interface PoolTrade {
   txHash: string;
@@ -249,6 +261,8 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   tokens: () => req<TokensResponse>("/tokens"),
+  importToken: (address: string) =>
+    req<ImportResult>("/tokens/import", { method: "POST", body: JSON.stringify({ address }) }),
   token: (addr: string) => req<TokenRow & { decimals: number; ethUsd?: number }>(`/tokens/${addr}`),
   candles: (addr: string, tf: string, limit = 300) =>
     req<{ pair: string; tf: string; candles: Candle[] }>(`/tokens/${addr}/candles?tf=${tf}&limit=${limit}`),

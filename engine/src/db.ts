@@ -84,7 +84,7 @@ DELETE FROM trades;
   // Token metadata from dexscreener (logo + social links), written by the
   // indexer's discovery pass. Added here too so the engine can run against a
   // db the indexer has not migrated yet.
-  for (const col of ["image_url TEXT", "website TEXT", "twitter TEXT", "telegram TEXT"]) {
+  for (const col of ["image_url TEXT", "website TEXT", "twitter TEXT", "telegram TEXT", "imported INTEGER DEFAULT 0"]) {
     const name = col.split(" ")[0];
     if (!hasColumn(db, "pools", name)) db.exec(`ALTER TABLE pools ADD COLUMN ${col}`);
   }

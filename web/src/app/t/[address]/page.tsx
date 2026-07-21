@@ -34,6 +34,8 @@ interface TokenDetail {
   website?: string | null;
   twitter?: string | null;
   telegram?: string | null;
+  imported?: boolean;
+  thinLiquidity?: boolean;
 }
 
 const TFS = ["1m", "5m", "1h", "1d"] as const;
@@ -389,6 +391,19 @@ export default function TradePage() {
           >
             {copied ? "copied" : truncAddr(detail.address)}
           </button>
+          {detail.imported && (
+            <span className="rounded border border-term-border px-1.5 py-0.5 text-[10px] uppercase text-term-faint" title="User-imported token">
+              imported
+            </span>
+          )}
+          {detail.thinLiquidity && (
+            <span
+              className="rounded border border-term-amber/50 px-1.5 py-0.5 text-[10px] font-semibold text-term-amber"
+              title={`Liquidity $${fmtCompact(detail.pool.liquidityUsd)}: under $10k, pricing may be unreliable`}
+            >
+              thin liq ${fmtCompact(detail.pool.liquidityUsd)}
+            </span>
+          )}
           {(detail.website || detail.twitter || detail.telegram) && (
             <span className="flex flex-wrap items-center gap-1">
               {detail.website && (

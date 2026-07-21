@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, TokenRow, fmtUsd, fmtCompact, fmtMcap } from "@/lib/api";
+
+const CA_RE = /^0x[0-9a-fA-F]{40}$/;
 import { useLivePrices } from "@/lib/ws";
 import { useDenom } from "@/lib/denom";
 import Leaderboard from "@/components/Leaderboard";
@@ -29,6 +31,9 @@ export default function Screener() {
   // Starred tokens, persisted locally.
   const [stars, setStars] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<string | null>(null);
+  // Trade-any-CA: import state for a pasted contract address.
+  const [importing, setImporting] = useState(false);
+  const [importErr, setImportErr] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -65,6 +70,27 @@ export default function Screener() {
   }, []);
 
   const addrs = useMemo(() => tokens.map((t) => t.address), [tokens]);
+
+  // A CA-looking search query that matches no tracked token can be imported.
+  const searchCa = useMemo(() => {
+    const q = search.trim();
+    if (!CA_RE.test(q)) return null;
+    return tokens.some((t) => t.address.toLowerCase() === q.toLowerCase()) ? null : q.toLowerCase();
+  }, [search, tokens]);
+
+  async function runImport(addr: string) {
+    if (importing) return;
+    setImporting(true);
+    setImportErr(null);
+    try {
+      const r = await api.importToken(addr);
+      router.push(`/t/${r.address}`);
+    } catch (e) {
+      setImportErr((e as Error).message);
+      setImporting(false);
+    }
+  }
+
   const live = useLivePrices(addrs);
 
   // Track previous live prices to flash rows on change.
@@ -160,6 +186,25 @@ export default function Screener() {
         </span>
       </div>
       {err && <div className="mb-3 text-sm text-term-red">API error: {err}</div>}
+      {searchCa && (
+        <div className="mb-3">
+          <button
+            onClick={() => runImport(searchCa)}
+            disabled={importing}
+            className="btn btn-ghost border-term-accent/50 text-term-accent hover:text-term-accent disabled:opacity-60"
+          >
+            {importing ? (
+              <span className="flex items-center gap-2">
+                <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                Importing...
+              </span>
+            ) : (
+              `Import ${searchCa.slice(0, 6)}...${searchCa.slice(-4)}`
+            )}
+          </button>
+          {importErr && <div className="mt-1 text-xs text-term-red">{importErr}</div>}
+        </div>
+      )}
       <div className="panel overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead className="sticky top-12 z-10 bg-term-panel">
@@ -202,6 +247,11 @@ export default function Screener() {
                         <div className="truncate">
                           <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
                           <span className="text-xs text-term-dim">{(t.name || "").slice(0, 28)}</span>
+                          {t.imported && (
+                            <span className="ml-1 rounded border border-term-border px-1 text-[9px] uppercase text-term-faint" title="User-imported token">
+                              imported
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5">
                           <button

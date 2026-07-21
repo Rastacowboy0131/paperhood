@@ -91,6 +91,9 @@ for (const col of [
   "website TEXT",
   "twitter TEXT",
   "telegram TEXT",
+  // User-imported tokens (trade-any-CA): kept active even below the
+  // discovery liquidity floor, and never staled out by discovery.
+  "imported INTEGER DEFAULT 0",
 ]) {
   try {
     db.exec(`ALTER TABLE pools ADD COLUMN ${col}`);

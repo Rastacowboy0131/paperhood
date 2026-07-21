@@ -55,7 +55,8 @@ ON CONFLICT(pair_address) DO UPDATE SET
 `);
 
 const deactivateStale = db.prepare(
-  `UPDATE pools SET active=0 WHERE last_seen < ? OR liquidity_usd < ?`
+  `UPDATE pools SET active=0
+   WHERE COALESCE(imported, 0) = 0 AND (last_seen < ? OR liquidity_usd < ?)`
 );
 
 export async function runDiscovery(): Promise<number> {

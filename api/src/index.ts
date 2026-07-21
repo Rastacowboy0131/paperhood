@@ -15,6 +15,7 @@ import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, EXPLORER_URL } from "./tokeninfo.js";
+import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
 import { WsHub } from "./ws.js";
 
 export interface BuildOpts {
@@ -66,6 +67,7 @@ export async function buildServer(opts: BuildOpts = {}) {
   };
   const quoteLimit = { rateLimit: { max: 60, timeWindow: "1 minute", keyGenerator: rlKey } };
   const tradeLimit = { rateLimit: { max: 20, timeWindow: "1 minute", keyGenerator: rlKey } };
+  const importLimit = { rateLimit: { max: 6, timeWindow: "1 minute", keyGenerator: rlKey } };
 
   async function ethUsdOrNull(): Promise<number | null> {
     try { return await getEthUsd(db); } catch { return null; }
@@ -115,7 +117,24 @@ export async function buildServer(opts: BuildOpts = {}) {
       website: px.website ?? null,
       twitter: px.twitter ?? null,
       telegram: px.telegram ?? null,
+      imported: !!(pool as unknown as { imported?: number | null }).imported,
+      thinLiquidity: (pool.liquidity_usd ?? 0) < THIN_LIQ_USD,
     };
+  });
+
+  // Trade-any-CA: import a robinhood-chain token by contract address.
+  // Idempotent (already-tracked tokens return alreadyTracked=true) and
+  // rate-limited per user/IP. Rejects addresses with no priced pair.
+  app.post("/tokens/import", importLimit, async (req, reply) => {
+    const body = req.body as { address?: string };
+    if (!body?.address) return reply.code(400).send({ error: "address required" });
+    try {
+      const r = await importToken(db, body.address);
+      return r;
+    } catch (e) {
+      if (e instanceof ImportError) return reply.code(e.status).send({ error: e.message });
+      return reply.code(500).send({ error: (e as Error).message });
+    }
   });
 
   app.get("/tokens/:address/candles", async (req, reply) => {
