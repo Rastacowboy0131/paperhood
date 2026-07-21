@@ -27,12 +27,12 @@
 
 html.dark {
   color-scheme: dark;
-  --term-bg: 11 14 17;
-  --term-panel: 17 22 28;
-  --term-raised: 22 29 36;
-  --term-hover: 21 27 34;
-  --term-border: 30 39 48;
-  --term-line: 26 34 42;
+  --term-bg: 14 16 19;
+  --term-panel: 22 24 29;
+  --term-raised: 28 31 37;
+  --term-hover: 27 30 36;
+  --term-border: 36 40 47;
+  --term-line: 31 34 41;
   --term-text: 205 214 223;
   --term-dim: 95 111 127;
   --term-faint: 74 88 102;
@@ -41,9 +41,9 @@ html.dark {
   --term-green: 31 196 122;
   --term-red: 238 85 102;
   --term-amber: 240 180 41;
-  --scrollbar-track: #0b0e11;
-  --scrollbar-thumb: #1e2730;
-  --scrollbar-thumb-hover: #2c3a48;
+  --scrollbar-track: #0e1013;
+  --scrollbar-thumb: #24282f;
+  --scrollbar-thumb-hover: #333944;
 }
 
 body {

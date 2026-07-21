@@ -11,7 +11,7 @@ function applyTheme(dark: boolean) {
     localStorage.setItem("theme", dark ? "dark" : "light");
   } catch {}
   const m = document.querySelector('meta[name="theme-color"]');
-  if (m) m.setAttribute("content", dark ? "#0b0e11" : "#ffffff");
+  if (m) m.setAttribute("content", dark ? "#0e1013" : "#ffffff");
 }
 
 export function ThemeToggle() {

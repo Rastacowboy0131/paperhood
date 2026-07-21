@@ -24,10 +24,10 @@ const CHART_THEMES = {
     border: "#e5e7eb",
   },
   dark: {
-    bg: "#11161c",
+    bg: "#16181d",
     text: "#5f6f7f",
-    grid: "#1a222a",
-    border: "#1e2730",
+    grid: "#1f2229",
+    border: "#24282f",
   },
 };
 
@@ -42,12 +42,14 @@ export function CandleChart({
   multiplier,
   compact = false,
   lines = [],
+  height = 420,
 }: {
   candles: Candle[];
   multiplier: number;
   // Compact mode formats axis/crosshair values as $12.5K / $3.4M / $1.2B (used for mcap).
   compact?: boolean;
   lines?: ChartLine[];
+  height?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -67,7 +69,7 @@ export function CandleChart({
         horzLines: { color: t.grid },
       },
       width: containerRef.current.clientWidth,
-      height: 420,
+      height,
       timeScale: { timeVisible: true, secondsVisible: false, borderColor: t.border },
       rightPriceScale: { borderColor: t.border },
     });
@@ -109,7 +111,7 @@ export function CandleChart({
       seriesRef.current = null;
       priceLinesRef.current = [];
     };
-  }, [compact]);
+  }, [compact, height]);
 
   useEffect(() => {
     if (!seriesRef.current) return;

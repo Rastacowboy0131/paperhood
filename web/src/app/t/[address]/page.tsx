@@ -64,6 +64,8 @@ export default function TradePage() {
   const [candles, setCandles] = useState<Candle[]>([]);
   const [metric, setMetric] = useState<"price" | "mcap">("price");
   const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [mode, setMode] = useState<"market" | "limit">("market");
+  const [copied, setCopied] = useState(false);
   const [denom, setDenom] = useDenom();
   const [amountBuy, setAmountBuy] = useState("100");
   const [sellPct, setSellPct] = useState("100");
@@ -280,33 +282,64 @@ export default function TradePage() {
   const openOrders = orders.filter((o) => o.status === "open");
   const pastOrders = orders.filter((o) => o.status !== "open").slice(0, 10);
 
+  function copyAddr() {
+    navigator.clipboard?.writeText(detail!.address).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  }
+
+  const statCell = (label: string, value: React.ReactNode, cls = "") => (
+    <div className="flex flex-col px-3 py-1.5">
+      <span className="text-[10px] uppercase tracking-wider text-term-dim">{label}</span>
+      <span className={`num text-[13px] font-semibold ${cls}`}>{value}</span>
+    </div>
+  );
+
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-      <div>
-        <div className="mb-3 flex flex-wrap items-baseline gap-3">
-          <h1 className="text-lg font-bold">{detail.symbol}</h1>
-          <span className="text-term-dim">{detail.name}</span>
-          <span className="num text-lg">
-            {denom === "eth"
-              ? priceQuote != null
-                ? `${fmtEth(priceQuote)} ETH`
-                : "-"
-              : priceUsd != null
-                ? `$${fmtUsd(priceUsd)}`
-                : "-"}
+    <div>
+      {/* Token stats strip */}
+      <div className="panel mb-3 flex flex-wrap items-center gap-x-1 gap-y-0 divide-x divide-term-line overflow-x-auto px-1 py-1">
+        <div className="flex items-center gap-2 px-3 py-1.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-term-raised text-[11px] font-bold text-term-accent">
+            {detail.symbol.slice(0, 2)}
           </span>
-          {typeof detail.change24hPct === "number" && (
-            <span className={`num ${detail.change24hPct >= 0 ? "text-term-green" : "text-term-red"}`}>
-              {detail.change24hPct >= 0 ? "+" : ""}
-              {detail.change24hPct.toFixed(2)}% 24h
-            </span>
-          )}
-          <span className="num ml-auto text-xs text-term-dim">
-            {detail.mcapUsd != null && <>mcap {fmtMcap(detail.mcapUsd)} · </>}
-            {detail.pool.dex} {detail.pool.version} · liq ${fmtCompact(detail.pool.liquidityUsd)} · vol $
-            {fmtCompact(detail.pool.volume24hUsd)} · pool {truncAddr(detail.pool.pair)}
-          </span>
+          <div className="leading-tight">
+            <div className="text-sm font-bold">{detail.symbol}</div>
+            <div className="max-w-[140px] truncate text-[11px] text-term-dim">{detail.name}</div>
+          </div>
+          <button
+            onClick={copyAddr}
+            title="Copy contract address"
+            className="num rounded border border-term-border px-1.5 py-0.5 text-[10px] text-term-dim hover:text-term-text"
+          >
+            {copied ? "copied" : truncAddr(detail.address)}
+          </button>
         </div>
+        {statCell(
+          "Price",
+          denom === "eth"
+            ? priceQuote != null
+              ? `${fmtEth(priceQuote)} ETH`
+              : "-"
+            : priceUsd != null
+              ? `$${fmtUsd(priceUsd)}`
+              : "-"
+        )}
+        {typeof detail.change24hPct === "number" &&
+          statCell(
+            "24h",
+            `${detail.change24hPct >= 0 ? "+" : ""}${detail.change24hPct.toFixed(2)}%`,
+            detail.change24hPct >= 0 ? "text-term-green" : "text-term-red"
+          )}
+        {detail.mcapUsd != null && statCell("MCap", fmtMcap(detail.mcapUsd))}
+        {statCell("Liquidity", `$${fmtCompact(detail.pool.liquidityUsd)}`)}
+        {statCell("24h Vol", `$${fmtCompact(detail.pool.volume24hUsd)}`)}
+        {statCell("Pool", `${detail.pool.dex} ${detail.pool.version}`)}
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-[1fr_340px]">
+      <div className="min-w-0">
         <div className="mb-2 flex items-center gap-2">
           <div className="tab-track">
           {TFS.map((x) => (
@@ -344,21 +377,21 @@ export default function TradePage() {
               candles={candles}
               compact={metric === "mcap"}
               lines={chartLines}
+              height={560}
               multiplier={
                 (denom === "eth" ? 1 : ethUsd || 1) *
                 (metric === "mcap" ? detail.totalSupply ?? 1 : 1)
               }
             />
           ) : (
-            <div className="flex h-[420px] items-center justify-center text-term-dim">No candle data yet</div>
+            <div className="flex h-[560px] items-center justify-center text-term-dim">No candle data yet</div>
           )}
         </div>
-        <TokenInfoTabs address={detail.address} symbol={detail.symbol} />
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3 lg:sticky lg:top-14 lg:self-start">
         <div className="panel p-4">
-          <div className="mb-3 flex gap-1">
+          <div className="mb-2 flex gap-1">
             <button
               onClick={() => setSide("buy")}
               className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${side === "buy" ? "bg-term-accent text-white" : "border border-term-border bg-term-panel text-term-dim hover:bg-term-hover hover:text-term-text"}`}
@@ -373,6 +406,19 @@ export default function TradePage() {
             </button>
           </div>
 
+          <div className="mb-3 flex gap-3 border-b border-term-line pb-1 text-xs">
+            {(["market", "limit"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`pb-1 font-semibold capitalize ${mode === m ? "border-b-2 border-term-accent text-term-text" : "text-term-dim hover:text-term-text"}`}
+              >
+                {m === "limit" ? "Limit / SL-TP" : "Market"}
+              </button>
+            ))}
+          </div>
+
+          {mode === "market" ? (<>
           {side === "buy" ? (
             <label className="mb-3 block text-sm">
               <span className="flex items-center justify-between text-term-dim">
@@ -499,50 +545,8 @@ export default function TradePage() {
             <div className="text-center text-xs text-term-dim">Connect wallet to trade</div>
           )}
           {tradeMsg && <div className="mt-2 text-xs">{tradeMsg}</div>}
-        </div>
-
-        {position && (
-          <div className="panel p-4 text-sm">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Your position</div>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span className="text-term-dim">Qty</span>
-                <span className="num">
-                  {fmtCompact(position.qtyDec)} {detail.symbol}
-                </span>
-              </div>
-              {avgEntryUsd != null && (
-                <div className="flex justify-between">
-                  <span className="text-term-dim">Avg entry</span>
-                  <span className="num">
-                    {denom === "eth" && ethUsd > 0 ? `${fmtEth(avgEntryUsd / ethUsd)} ETH` : `$${fmtUsd(avgEntryUsd)}`}
-                  </span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-term-dim">Cost basis</span>
-                <span className="num">${fmtUsd(position.costBasisUsd, 2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-term-dim">Mark (exit)</span>
-                <span className="num">${fmtUsd(position.markUsd, 2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-term-dim">Unrealized PnL</span>
-                <span className={`num ${position.unrealizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
-                  {position.unrealizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(position.unrealizedPnlUsd, 2)}
-                  {position.costBasisUsd > 0 && (
-                    <> ({position.unrealizedPnlUsd >= 0 ? "+" : ""}{((position.unrealizedPnlUsd / position.costBasisUsd) * 100).toFixed(2)}%)</>
-                  )}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {user && (
-          <div className="panel p-4 text-sm">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Orders</div>
+          </>) : (<>
+          {user ? (<>
             <div className="mb-2 flex gap-1">
               <button
                 onClick={() => setOrderSide("buy")}
@@ -616,7 +620,54 @@ export default function TradePage() {
               {placing ? "Placing..." : "Place order"}
             </button>
             {orderMsg && <div className="mt-2 text-xs">{orderMsg}</div>}
+          </>) : (
+            <div className="text-center text-xs text-term-dim">Connect wallet to place orders</div>
+          )}
+          </>)}
+        </div>
 
+        {position && (
+          <div className="panel p-4 text-sm">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Your position</div>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-term-dim">Qty</span>
+                <span className="num">
+                  {fmtCompact(position.qtyDec)} {detail.symbol}
+                </span>
+              </div>
+              {avgEntryUsd != null && (
+                <div className="flex justify-between">
+                  <span className="text-term-dim">Avg entry</span>
+                  <span className="num">
+                    {denom === "eth" && ethUsd > 0 ? `${fmtEth(avgEntryUsd / ethUsd)} ETH` : `$${fmtUsd(avgEntryUsd)}`}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-term-dim">Cost basis</span>
+                <span className="num">${fmtUsd(position.costBasisUsd, 2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-term-dim">Mark (exit)</span>
+                <span className="num">${fmtUsd(position.markUsd, 2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-term-dim">Unrealized PnL</span>
+                <span className={`num ${position.unrealizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
+                  {position.unrealizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(position.unrealizedPnlUsd, 2)}
+                  {position.costBasisUsd > 0 && (
+                    <> ({position.unrealizedPnlUsd >= 0 ? "+" : ""}{((position.unrealizedPnlUsd / position.costBasisUsd) * 100).toFixed(2)}%)</>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {user && (
+          <div className="panel p-4 text-sm">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Orders</div>
             {openOrders.length > 0 && (
               <div className="mt-3 space-y-1 text-xs">
                 <div className="text-[11px] uppercase tracking-wider text-term-dim">Open</div>
@@ -657,6 +708,9 @@ export default function TradePage() {
           </div>
         )}
       </div>
+      </div>
+
+      <TokenInfoTabs address={detail.address} symbol={detail.symbol} />
     </div>
   );
 }
