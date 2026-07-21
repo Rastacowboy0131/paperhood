@@ -11,6 +11,15 @@ import { TokenLogo } from "@/components/TokenLogo";
 import { useAuth } from "@/lib/auth";
 import { useDenom, fmtEth } from "@/lib/denom";
 
+// Parse a number with optional k/m/b suffix ("2.5M" -> 2500000).
+function parseSuffixed(s: string): number {
+  const m = s.trim().replace(/,/g, "").match(/^([0-9]*\.?[0-9]+)\s*([kKmMbB])?$/);
+  if (!m) return NaN;
+  const n = parseFloat(m[1]);
+  const suf = (m[2] || "").toLowerCase();
+  return suf === "k" ? n * 1e3 : suf === "m" ? n * 1e6 : suf === "b" ? n * 1e9 : n;
+}
+
 interface TokenDetail {
   address: string;
   symbol: string;
@@ -40,6 +49,11 @@ interface TokenDetail {
 }
 
 const TFS = ["1m", "5m", "1h", "1d"] as const;
+
+// Chart display state is independent of the trade form's currency; both keys
+// persist across visits. Chart defaults to MCap in USD.
+const CHART_METRIC_KEY = "ph.chartMetric";
+const CHART_CURRENCY_KEY = "ph.chartCurrency";
 
 // Mobile chart/trades split. The combined vertical budget is fixed; dragging
 // the grip trades chart height against the trades box height.
@@ -96,7 +110,8 @@ export default function TradePage() {
   const [ethUsd, setEthUsd] = useState(0);
   const [tf, setTf] = useState<(typeof TFS)[number]>("5m");
   const [candles, setCandles] = useState<Candle[]>([]);
-  const [metric, setMetric] = useState<"price" | "mcap">("price");
+  const [metric, setMetric] = useState<"price" | "mcap">("mcap");
+  const [chartCurrency, setChartCurrency] = useState<"usd" | "eth">("usd");
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [mode, setMode] = useState<"market" | "limit">("market");
   const [copied, setCopied] = useState(false);
@@ -107,9 +122,11 @@ export default function TradePage() {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [quoteErr, setQuoteErr] = useState<string | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
+  const [cash, setCash] = useState<{ usd: number; eth: number } | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderSide, setOrderSide] = useState<"buy" | "sell">("buy");
   const [orderType, setOrderType] = useState<"limit" | "stop">("limit");
+  const [orderTargetMode, setOrderTargetMode] = useState<"price" | "mcap">("mcap");
   const [orderTrigger, setOrderTrigger] = useState("");
   const [orderAmount, setOrderAmount] = useState("100");
   const [orderMsg, setOrderMsg] = useState<string | null>(null);
@@ -117,11 +134,39 @@ export default function TradePage() {
   const [trading, setTrading] = useState(false);
   const [tradeMsg, setTradeMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Chart drag interactions: a draft "new limit" line and a pending confirm
+  // chip after a drag release (new order or moved existing order).
+  const [draftLine, setDraftLine] = useState<number | null>(null); // quote terms
+  const [dragConfirm, setDragConfirm] = useState<
+    { kind: "new" | "move"; orderId?: number; priceQuote: number } | null
+  >(null);
+  const [dragBusy, setDragBusy] = useState(false);
 
   // Mobile-only chart/trades split, persisted across visits.
   const isMobile = useIsMobile();
   const [chartH, setChartH] = useState(MOBILE_CHART_DEFAULT);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+
+  // Restore persisted chart mode (metric + currency), independent of the
+  // trade form's USD/ETH denom.
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem(CHART_METRIC_KEY);
+      if (m === "price" || m === "mcap") setMetric(m);
+      const c = localStorage.getItem(CHART_CURRENCY_KEY);
+      if (c === "usd" || c === "eth") setChartCurrency(c);
+    } catch {}
+  }, []);
+
+  const changeMetric = useCallback((m: "price" | "mcap") => {
+    setMetric(m);
+    try { localStorage.setItem(CHART_METRIC_KEY, m); } catch {}
+  }, []);
+
+  const changeChartCurrency = useCallback((c: "usd" | "eth") => {
+    setChartCurrency(c);
+    try { localStorage.setItem(CHART_CURRENCY_KEY, c); } catch {}
+  }, []);
 
   useEffect(() => {
     try {
@@ -185,13 +230,14 @@ export default function TradePage() {
   }, [address, tf]);
 
   const refreshPosition = useCallback(() => {
-    if (!user) return setPosition(null);
+    if (!user) { setPosition(null); setCash(null); return; }
     api
       .portfolio()
       .then((p: Portfolio) => {
         setPosition(p.positions.find((x) => x.token.toLowerCase() === address.toLowerCase()) ?? null);
+        setCash({ usd: p.cashUsd, eth: p.cashEth });
       })
-      .catch(() => setPosition(null));
+      .catch(() => { setPosition(null); setCash(null); });
   }, [user, address]);
 
   useEffect(refreshPosition, [refreshPosition]);
@@ -281,10 +327,9 @@ export default function TradePage() {
     setPlacing(true);
     setOrderMsg(null);
     try {
-      const trigger = parseFloat(orderTrigger);
       const amount = parseFloat(orderAmount);
-      // Trigger is entered in the current display denom; convert to quote (ETH) terms.
-      const triggerQuote = denom === "eth" ? trigger : ethUsd > 0 ? trigger / ethUsd : NaN;
+      const triggerQuote = orderTriggerQuote();
+      if (!Number.isFinite(triggerQuote) || triggerQuote <= 0) throw new Error("invalid target");
       await api.createOrder({
         token: detail.address,
         side: orderSide,
@@ -300,6 +345,67 @@ export default function TradePage() {
     } finally {
       setPlacing(false);
     }
+  }
+
+  // Convert the trigger input (mcap with k/m/b suffix, or plain USD price)
+  // to quote (ETH) terms, the unit orders are stored in.
+  function orderTriggerQuote(): number {
+    const raw = parseSuffixed(orderTrigger);
+    if (!Number.isFinite(raw) || raw <= 0 || ethUsd <= 0) return NaN;
+    if (orderTargetMode === "mcap") {
+      const supply = detail?.totalSupply;
+      if (supply == null || supply <= 0) return NaN;
+      return raw / supply / ethUsd;
+    }
+    return raw / ethUsd;
+  }
+
+  // Chart drag: release of a draggable line. "new-limit" places a fresh
+  // order; "order-<id>" moves an existing one. Both confirm before submit.
+  const onChartLineDragEnd = useCallback((dragId: string, priceQuote: number) => {
+    if (dragId === "new-limit") {
+      setDraftLine(priceQuote);
+      setDragConfirm({ kind: "new", priceQuote });
+    } else if (dragId.startsWith("order-")) {
+      const id = parseInt(dragId.slice(6), 10);
+      if (Number.isInteger(id)) setDragConfirm({ kind: "move", orderId: id, priceQuote });
+    }
+  }, []);
+
+  async function confirmDrag() {
+    if (!dragConfirm || !detail) return;
+    setDragBusy(true);
+    try {
+      if (dragConfirm.kind === "new") {
+        const cur = priceQuote;
+        const isBuy = cur == null || dragConfirm.priceQuote <= cur;
+        await api.createOrder({
+          token: detail.address,
+          side: isBuy ? "buy" : "sell",
+          type: "limit",
+          triggerPrice: dragConfirm.priceQuote,
+          amount: isBuy ? buyAmountUsd() || 100 : 100,
+        });
+        setDraftLine(null);
+      } else if (dragConfirm.orderId != null) {
+        await api.updateOrder(dragConfirm.orderId, { triggerPrice: dragConfirm.priceQuote });
+      }
+      setDragConfirm(null);
+      refreshOrders();
+    } catch (e: any) {
+      setOrderMsg(`Order failed: ${e.message}`);
+      setDragConfirm(null);
+      setDraftLine(null);
+      refreshOrders();
+    } finally {
+      setDragBusy(false);
+    }
+  }
+
+  function cancelDrag() {
+    setDragConfirm(null);
+    setDraftLine(null);
+    refreshOrders();
   }
 
   async function cancelOrder(id: number) {
@@ -344,23 +450,31 @@ export default function TradePage() {
 
   // Avg entry in USD per token from FIFO cost basis over the open position.
   const avgEntryUsd = position && position.qtyDec > 0 ? position.costBasisUsd / position.qtyDec : null;
-  // Chart lines are in quote (ETH) terms, same unit as candles.
+  // Chart lines are in quote (ETH) terms, same unit as candles; the chart
+  // multiplier scales them into the displayed metric/currency, so order lines
+  // render correctly in both Price and MCap modes.
   const avgEntryQuote = avgEntryUsd != null && ethUsd > 0 ? avgEntryUsd / ethUsd : null;
-  const chartLines: ChartLine[] =
-    metric === "price"
-      ? [
-          ...(avgEntryQuote != null ? [{ price: avgEntryQuote, color: "#d97706", title: "avg entry" }] : []),
-          ...orders
-            .filter((o) => o.status === "open")
-            .map((o) => ({
-              price: o.triggerPrice,
-              color: o.side === "buy" || (o.side === "sell" && o.type === "limit") ? "#16a34a" : "#ef4444",
-              title: o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP",
-            })),
-        ]
-      : [];
+  const chartLines: ChartLine[] = [
+    ...(avgEntryQuote != null ? [{ price: avgEntryQuote, color: "#d97706", title: "avg entry" }] : []),
+    ...orders
+      .filter((o) => o.status === "open")
+      .map((o) => ({
+        price: dragConfirm?.kind === "move" && dragConfirm.orderId === o.id ? dragConfirm.priceQuote : o.triggerPrice,
+        color: o.side === "buy" || (o.side === "sell" && o.type === "limit") ? "#16a34a" : "#ef4444",
+        title: o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP",
+        dragId: `order-${o.id}`,
+      })),
+    ...(draftLine != null
+      ? [{ price: draftLine, color: "#3b82f6", title: "new limit", dragId: "new-limit" }]
+      : []),
+  ];
   const openOrders = orders.filter((o) => o.status === "open");
   const pastOrders = orders.filter((o) => o.status !== "open").slice(0, 10);
+
+  // Display helpers for orders: implied USD price and mcap from a quote-terms trigger.
+  const orderPriceUsd = (trigQuote: number) => trigQuote * ethUsd;
+  const orderMcapUsd = (trigQuote: number) =>
+    detail.totalSupply != null && detail.totalSupply > 0 ? trigQuote * ethUsd * detail.totalSupply : null;
 
   function copyAddr() {
     navigator.clipboard?.writeText(detail!.address).then(() => {
@@ -494,7 +608,7 @@ export default function TradePage() {
           {(["price", "mcap"] as const).map((m) => (
             <button
               key={m}
-              onClick={() => setMetric(m)}
+              onClick={() => changeMetric(m)}
               disabled={m === "mcap" && detail.totalSupply == null}
               className={`tab disabled:opacity-40 ${metric === m ? "tab-active" : ""}`}
             >
@@ -502,27 +616,56 @@ export default function TradePage() {
             </button>
           ))}
           </div>
+          {user && (
+            <button
+              type="button"
+              title="Drag the blue line on the chart to set a limit order"
+              onClick={() => {
+                if (draftLine != null) { setDraftLine(null); setDragConfirm(null); return; }
+                if (priceQuote != null) setDraftLine(priceQuote * 1.05);
+              }}
+              className={`btn btn-ghost text-xs ${draftLine != null ? "text-term-accent" : ""}`}
+            >
+              {draftLine != null ? "cancel line" : "+ limit line"}
+            </button>
+          )}
           <button
-            onClick={() => setDenom(denom === "usd" ? "eth" : "usd")}
+            onClick={() => changeChartCurrency(chartCurrency === "usd" ? "eth" : "usd")}
+            title="Chart currency"
             className="btn btn-ghost ml-auto"
           >
-            {denom.toUpperCase()}
+            {chartCurrency.toUpperCase()}
           </button>
         </div>
-        <div className="panel overflow-hidden">
+        <div className="panel relative overflow-hidden">
           {candles.length ? (
             <CandleChart
               candles={candles}
               compact={metric === "mcap"}
               lines={chartLines}
               height={chartHeight}
+              onLineDragEnd={onChartLineDragEnd}
               multiplier={
-                (denom === "eth" ? 1 : ethUsd || 1) *
+                (chartCurrency === "eth" ? 1 : ethUsd || 1) *
                 (metric === "mcap" ? detail.totalSupply ?? 1 : 1)
               }
             />
           ) : (
             <div style={{ height: chartHeight }} className="flex items-center justify-center text-term-dim">No candle data yet</div>
+          )}
+          {dragConfirm && (
+            <div className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-term-border bg-term-panel px-3 py-1.5 text-xs shadow-lg">
+              <span className="num">
+                {dragConfirm.kind === "new"
+                  ? `${priceQuote != null && dragConfirm.priceQuote <= priceQuote ? "Limit buy" : "Limit sell"} @ $${fmtUsd(orderPriceUsd(dragConfirm.priceQuote))}`
+                  : `Move order to $${fmtUsd(orderPriceUsd(dragConfirm.priceQuote))}`}
+                {orderMcapUsd(dragConfirm.priceQuote) != null && ` (${fmtMcap(orderMcapUsd(dragConfirm.priceQuote)!)} mcap)`}
+              </span>
+              <button onClick={confirmDrag} disabled={dragBusy} className="rounded-full bg-term-accent px-2.5 py-0.5 font-semibold text-white disabled:opacity-40">
+                {dragBusy ? "..." : "confirm"}
+              </button>
+              <button onClick={cancelDrag} disabled={dragBusy} className="text-term-dim hover:text-term-text">cancel</button>
+            </div>
           )}
         </div>
 
@@ -561,6 +704,16 @@ export default function TradePage() {
           </div>
         )}
         <div className="panel p-4">
+          {user && cash && (
+            <div className="mb-2 flex items-center justify-between text-[11px] text-term-dim">
+              <span className="uppercase tracking-wider">Balance</span>
+              <span className="num">
+                ${fmtUsd(cash.usd, 2)}
+                <span className="text-term-faint"> / </span>
+                {fmtEth(cash.eth)} ETH
+              </span>
+            </div>
+          )}
           <div className="mb-2 flex gap-1">
             <button
               onClick={() => setSide("buy")}
@@ -607,6 +760,13 @@ export default function TradePage() {
                 inputMode="decimal"
                 className="num input mt-1 py-2"
               />
+              {ethUsd > 0 && parseFloat(amountBuy) > 0 && (
+                <span className="num mt-1 block text-[11px] text-term-dim">
+                  = {denom === "usd"
+                    ? `${fmtEth(parseFloat(amountBuy) / ethUsd)} ETH`
+                    : `$${fmtUsd(parseFloat(amountBuy) * ethUsd, 2)}`}
+                </span>
+              )}
               <span className="mt-2 flex gap-1">
                 {BUY_PRESETS[denom].map((v) => (
                   <button
@@ -738,26 +898,61 @@ export default function TradePage() {
               </button>
             </div>
             <label className="mb-2 block text-xs">
-              <span className="flex justify-between text-term-dim">
-                Trigger price ({denom === "eth" ? "ETH" : "USD"})
+              <span className="flex items-center justify-between text-term-dim">
+                <span className="flex items-center gap-1">
+                  Target
+                  <span className="tab-track ml-1">
+                    {(["mcap", "price"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => { setOrderTargetMode(m); setOrderTrigger(""); }}
+                        disabled={m === "mcap" && detail.totalSupply == null}
+                        className={`tab px-1.5 py-0 text-[10px] disabled:opacity-40 ${orderTargetMode === m ? "tab-active" : ""}`}
+                      >
+                        {m === "mcap" ? "MCap" : "Price"}
+                      </button>
+                    ))}
+                  </span>
+                </span>
                 <button
                   type="button"
                   className="text-term-accent hover:underline"
                   onClick={() => {
-                    const now = denom === "eth" ? priceQuote : priceUsd;
-                    if (now != null) setOrderTrigger(String(now));
+                    if (orderTargetMode === "mcap") {
+                      if (priceUsd != null && detail.totalSupply != null) {
+                        setOrderTrigger(fmtMcap(priceUsd * detail.totalSupply).replace("$", ""));
+                      }
+                    } else if (priceUsd != null) {
+                      setOrderTrigger(String(priceUsd));
+                    }
                   }}
                 >
-                  now: {denom === "eth" ? (priceQuote != null ? fmtEth(priceQuote) : "-") : priceUsd != null ? `$${fmtUsd(priceUsd)}` : "-"}
+                  now: {orderTargetMode === "mcap"
+                    ? priceUsd != null && detail.totalSupply != null ? fmtMcap(priceUsd * detail.totalSupply) : "-"
+                    : priceUsd != null ? `$${fmtUsd(priceUsd)}` : "-"}
                 </button>
               </span>
               <input
                 value={orderTrigger}
                 onChange={(e) => setOrderTrigger(e.target.value)}
                 inputMode="decimal"
-                placeholder="trigger price"
+                placeholder={orderTargetMode === "mcap" ? "target mcap, e.g. 2.5M" : "target price (USD)"}
                 className="num input mt-1"
               />
+              {(() => {
+                const q = orderTriggerQuote();
+                if (!Number.isFinite(q) || q <= 0) return null;
+                const px = q * ethUsd;
+                const mc = detail.totalSupply != null && detail.totalSupply > 0 ? px * detail.totalSupply : null;
+                return (
+                  <span className="num mt-1 block text-[11px] text-term-dim">
+                    {orderTargetMode === "mcap"
+                      ? `= $${fmtUsd(px)} per token`
+                      : mc != null ? `= ${fmtMcap(mc)} mcap` : null}
+                  </span>
+                );
+              })()}
             </label>
             <label className="mb-2 block text-xs">
               <span className="text-term-dim">{orderSide === "buy" ? "Amount (USD)" : "Sell % of position"}</span>
@@ -784,7 +979,7 @@ export default function TradePage() {
             </label>
             <button
               onClick={placeOrder}
-              disabled={placing || !parseFloat(orderTrigger) || !parseFloat(orderAmount) || (orderSide === "sell" && !position)}
+              disabled={placing || !(orderTriggerQuote() > 0) || !parseFloat(orderAmount) || (orderSide === "sell" && !position)}
               className="btn btn-primary w-full py-1.5"
             >
               {placing ? "Placing..." : "Place order"}
@@ -842,12 +1037,15 @@ export default function TradePage() {
               <div className="mt-3 space-y-1 text-xs">
                 <div className="text-[11px] uppercase tracking-wider text-term-dim">Open</div>
                 {openOrders.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between rounded-lg bg-term-raised px-2 py-1">
+                  <div key={o.id} className="flex items-center justify-between gap-2 rounded-lg bg-term-raised px-2 py-1">
                     <span className={`num ${o.side === "buy" || o.type === "limit" ? "text-term-green" : "text-term-red"}`}>
                       {o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP"}
                     </span>
-                    <span className="num">
-                      @ {denom === "eth" ? `${fmtEth(o.triggerPrice)} ETH` : `$${fmtUsd(o.triggerPrice * ethUsd)}`}
+                    <span className="num text-right">
+                      @ ${fmtUsd(orderPriceUsd(o.triggerPrice))}
+                      {orderMcapUsd(o.triggerPrice) != null && (
+                        <span className="block text-[10px] text-term-dim">{fmtMcap(orderMcapUsd(o.triggerPrice)!)} mcap</span>
+                      )}
                     </span>
                     <span className="num text-term-dim">{o.side === "buy" ? `$${fmtUsd(o.amount, 2)}` : `${o.amount}%`}</span>
                     <button onClick={() => cancelOrder(o.id)} className="text-term-red hover:underline">

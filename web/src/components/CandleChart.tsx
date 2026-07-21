@@ -13,6 +13,8 @@ export interface ChartLine {
   price: number;
   color: string;
   title: string;
+  // Set to make the line draggable; reported back through onLineDragEnd.
+  dragId?: string;
 }
 
 // Chart chrome per theme. Candles stay the same green/red on both.
@@ -43,6 +45,7 @@ export function CandleChart({
   compact = false,
   lines = [],
   height = 420,
+  onLineDragEnd,
 }: {
   candles: Candle[];
   multiplier: number;
@@ -50,11 +53,18 @@ export function CandleChart({
   compact?: boolean;
   lines?: ChartLine[];
   height?: number;
+  // Called when a draggable line is released at a new price (in the candles'
+  // native quote unit, i.e. already divided by the multiplier).
+  onLineDragEnd?: (dragId: string, price: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
-  const priceLinesRef = useRef<IPriceLine[]>([]);
+  const priceLinesRef = useRef<{ pl: IPriceLine; line: ChartLine }[]>([]);
+  const dragEndRef = useRef(onLineDragEnd);
+  const multRef = useRef(multiplier);
+  dragEndRef.current = onLineDragEnd;
+  multRef.current = multiplier;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -86,6 +96,61 @@ export function CandleChart({
     chartRef.current = chart;
     seriesRef.current = series;
 
+    // Drag support for order lines. lightweight-charts price lines are not
+    // natively draggable, so we hit-test pointer position against each
+    // draggable line's y coordinate and move the line while dragging.
+    const el = containerRef.current;
+    let dragging: { pl: IPriceLine; line: ChartLine } | null = null;
+
+    const hitTest = (y: number) => {
+      for (const entry of priceLinesRef.current) {
+        if (!entry.line.dragId) continue;
+        const coord = series.priceToCoordinate(entry.line.price * multRef.current);
+        if (coord != null && Math.abs(coord - y) <= 8) return entry;
+      }
+      return null;
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const rect = el.getBoundingClientRect();
+      const hit = hitTest(e.clientY - rect.top);
+      if (!hit) return;
+      dragging = hit;
+      e.preventDefault();
+      e.stopPropagation();
+      el.setPointerCapture(e.pointerId);
+      chart.applyOptions({ handleScroll: false, handleScale: false });
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      const rect = el.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      if (!dragging) {
+        el.style.cursor = hitTest(y) ? "ns-resize" : "";
+        return;
+      }
+      const p = series.coordinateToPrice(y);
+      if (p != null && p > 0) dragging.pl.applyOptions({ price: p as number });
+    };
+
+    const endDrag = (e: PointerEvent) => {
+      if (!dragging) return;
+      const rect = el.getBoundingClientRect();
+      const p = series.coordinateToPrice(e.clientY - rect.top);
+      const d = dragging;
+      dragging = null;
+      chart.applyOptions({ handleScroll: true, handleScale: true });
+      try { el.releasePointerCapture(e.pointerId); } catch {}
+      if (p != null && p > 0 && d.line.dragId && dragEndRef.current) {
+        dragEndRef.current(d.line.dragId, (p as number) / multRef.current);
+      }
+    };
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", endDrag);
+    el.addEventListener("pointercancel", endDrag);
+
     const onResize = () => {
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
     };
@@ -106,6 +171,10 @@ export function CandleChart({
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", onResize);
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", endDrag);
+      el.removeEventListener("pointercancel", endDrag);
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;
@@ -137,21 +206,22 @@ export function CandleChart({
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
-    for (const pl of priceLinesRef.current) {
+    for (const { pl } of priceLinesRef.current) {
       try { series.removePriceLine(pl); } catch {}
     }
     priceLinesRef.current = lines
       .filter((l) => Number.isFinite(l.price) && l.price > 0)
-      .map((l) =>
-        series.createPriceLine({
+      .map((l) => ({
+        line: l,
+        pl: series.createPriceLine({
           price: l.price * multiplier,
           color: l.color,
-          lineWidth: 1,
+          lineWidth: l.dragId ? 2 : 1,
           lineStyle: 2, // dashed
           axisLabelVisible: true,
           title: l.title,
-        })
-      );
+        }),
+      }));
   }, [lines, multiplier, compact]);
 
   return <div ref={containerRef} className="w-full" />;
