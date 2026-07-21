@@ -117,6 +117,8 @@ export default function TradePage() {
   const [metric, setMetric] = useState<"price" | "mcap">("mcap");
   const [chartCurrency, setChartCurrency] = useState<"usd" | "eth">("usd");
   const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [tradeNote, setTradeNote] = useState("");
+  const { signedIn: watchAuthed, watched, toggle: toggleWatch } = useWatchlist();
   const [mode, setMode] = useState<"market" | "limit">("market");
   const [copied, setCopied] = useState(false);
   const [bannerBroken, setBannerBroken] = useState(false);
@@ -524,6 +526,15 @@ export default function TradePage() {
           >
             {copied ? "copied" : truncAddr(detail.address)}
           </button>
+          {watchAuthed && (
+            <button
+              onClick={() => toggleWatch(detail.address)}
+              title={watched[detail.address.toLowerCase()] ? "Remove from watchlist" : "Add to watchlist"}
+              className={`px-1 text-sm ${watched[detail.address.toLowerCase()] ? "text-term-amber" : "text-term-faint hover:text-term-dim"}`}
+            >
+              {watched[detail.address.toLowerCase()] ? "\u2605" : "\u2606"}
+            </button>
+          )}
           {detail.source === "pons" && (
             <span
               className="rounded border border-term-border px-1.5 py-0.5 text-[10px] uppercase text-term-faint"
@@ -895,13 +906,23 @@ export default function TradePage() {
           )}
 
           {user ? (
-            <button
-              onClick={executeTrade}
+            <>
+              <input
+                type="text"
+                value={tradeNote}
+                onChange={(e) => setTradeNote(e.target.value.slice(0, 500))}
+                placeholder="Journal note (optional)"
+                maxLength={500}
+                className="mb-2 w-full rounded border border-term-border bg-transparent px-2 py-1.5 text-xs text-term-text placeholder:text-term-faint focus:border-term-accent focus:outline-none"
+              />
+              <button
+                onClick={executeTrade}
               disabled={trading || !quote || overCap || (side === "sell" && !position)}
               className={`w-full rounded-full py-2.5 text-sm font-semibold text-white transition-[filter] hover:brightness-105 disabled:opacity-40 ${side === "buy" ? "bg-term-accent" : "bg-term-red"}`}
             >
               {trading ? "Executing..." : side === "buy" ? `Buy ${detail.symbol}` : `Sell ${detail.symbol}`}
-            </button>
+              </button>
+            </>
           ) : (
             <div className="text-center text-xs text-term-dim">Connect wallet to trade</div>
           )}

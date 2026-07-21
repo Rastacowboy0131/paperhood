@@ -9,6 +9,7 @@ import { BadgeGrid } from "@/components/Badges";
 import { ShareButton } from "@/components/ShareCard";
 import { TokenLogo } from "@/components/TokenLogo";
 import { PortfolioStats } from "@/components/PortfolioStats";
+import { Journal } from "@/components/Journal";
 
 function pnlClass(n: number) {
   return n >= 0 ? "text-term-green" : "text-term-red";
@@ -266,6 +267,13 @@ export default function PortfolioPage() {
               </button>
             </div>
           )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Journal (all tokens)</h2>
+        <div className="panel">
+          <Journal showToken />
         </div>
       </section>
 

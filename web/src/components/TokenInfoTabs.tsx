@@ -14,14 +14,16 @@ import {
   fmtUsd,
   truncAddr,
 } from "@/lib/api";
+import { Journal } from "@/components/Journal";
 
-type Tab = "trades" | "traders" | "holders" | "paper";
+type Tab = "trades" | "traders" | "holders" | "paper" | "journal";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "trades", label: "Trades" },
   { id: "traders", label: "Top Traders" },
   { id: "holders", label: "Holders" },
   { id: "paper", label: "Paper Trades" },
+  { id: "journal", label: "Journal" },
 ];
 
 function timeAgo(ts: number): string {
@@ -269,6 +271,8 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
             </table>
           )
         )}
+
+        {tab === "journal" && <Journal token={address} />}
       </div>
     </div>
   );
