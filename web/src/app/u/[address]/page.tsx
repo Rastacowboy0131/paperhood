@@ -2,8 +2,9 @@
 
 // Public trader profile: a read-only transparency view of another trader.
 // Linked from leaderboard rows and podium cards. No copy execution.
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { api, TraderProfile, fmtUsd, fmtCompact, truncAddr } from "@/lib/api";
 import { EquityChart } from "@/components/EquityChart";
 import { BadgeGrid } from "@/components/Badges";
@@ -17,8 +18,9 @@ function sign(n: number) {
   return n >= 0 ? "+" : "";
 }
 
-export default function TraderPage({ params }: { params: Promise<{ address: string }> }) {
-  const { address } = use(params);
+export default function TraderPage() {
+  const params = useParams<{ address: string }>();
+  const address = params.address;
   const [profile, setProfile] = useState<TraderProfile | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
