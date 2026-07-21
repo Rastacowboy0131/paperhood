@@ -7,11 +7,14 @@ import { truncAddr } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TourHelpButton } from "@/components/Tour";
 import { SoundToggle } from "@/components/SoundToggle";
+import { ShortcutHelpButton } from "@/components/KeyboardShortcuts";
 
 const links = [
   { href: "/", label: "Screener" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/seasons", label: "Seasons" },
+  { href: "/achievements", label: "Achievements" },
   { href: "/referrals", label: "Referrals" },
 ];
 
@@ -44,6 +47,7 @@ export function Nav() {
         </nav>
         <div className="ml-auto flex h-14 items-center gap-1.5 text-sm sm:gap-2">
           <TourHelpButton />
+          <ShortcutHelpButton />
           <SoundToggle />
           <ThemeToggle />
           {error && (
