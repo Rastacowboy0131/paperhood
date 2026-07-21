@@ -468,7 +468,10 @@ export async function buildServer(opts: BuildOpts = {}) {
     }, iv);
     orderTimer.unref();
     // Periodic equity sampler for the profile curve.
-    const eiv = Number(process.env.EQUITY_SNAPSHOT_INTERVAL_MS || 10 * 60 * 1000);
+    // 60s default: leaderboards rank by equity change, so marks need to be
+    // reasonably fresh. Per-user snapshot writes are still throttled inside
+    // recordEquitySnapshot (MIN_GAP_S) unless forced by a trade.
+    const eiv = Number(process.env.EQUITY_SNAPSHOT_INTERVAL_MS || 60 * 1000);
     equityTimer = setInterval(() => {
       snapshotActiveUsers(db).catch((e) => app.log.error(e, "equity sampler failed"));
     }, eiv);

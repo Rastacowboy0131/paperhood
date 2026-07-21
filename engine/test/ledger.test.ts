@@ -136,12 +136,11 @@ test("leaderboards rank by realized PnL pct", async () => {
   assert.equal(future.length, 0);
 });
 
-test("season boundaries are Mondays 00:00 UTC", () => {
-  // 2026-07-20 is a Monday.
-  const mon = Date.UTC(2026, 6, 20) / 1000;
-  assert.equal(seasonStart(mon), mon);
-  assert.equal(seasonStart(mon + 3 * 86400 + 12345), mon); // Thursday same week
-  assert.equal(seasonStart(mon - 1), mon - 7 * 86400);     // Sunday 23:59:59 is prior season
+test("season boundaries are the 1st of the month 00:00 UTC", () => {
+  const first = Date.UTC(2026, 6, 1) / 1000; // 2026-07-01
+  assert.equal(seasonStart(first), first);
+  assert.equal(seasonStart(first + 19 * 86400 + 12345), first); // mid-month
+  assert.equal(seasonStart(first - 1), Date.UTC(2026, 5, 1) / 1000); // June 30 23:59:59 is prior season
 });
 
 test("max buy cap: min(3.5% of supply, 35M tokens)", async () => {
