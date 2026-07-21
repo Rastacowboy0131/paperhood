@@ -1,5 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
 import { quoteSwap, getTokenMeta, Quote } from "./quote.js";
+import { recordActivity } from "./activity.js";
+
+function symbolForToken(db: DatabaseSync, token: string): string | null {
+  const r = db.prepare(
+    "SELECT symbol FROM pools WHERE token_address = ? COLLATE NOCASE ORDER BY liquidity_usd DESC LIMIT 1"
+  ).get(token.toLowerCase()) as { symbol: string | null } | undefined;
+  return r?.symbol ?? null;
+}
 
 export const STARTING_BALANCE_USD = 10_000;
 
@@ -108,7 +116,9 @@ export function getOrCreateUser(db: DatabaseSync, address: string): number {
   const row = db.prepare("SELECT id FROM users WHERE address = ?").get(addr) as { id: number } | undefined;
   if (row) return row.id;
   db.prepare("INSERT INTO users (address, created_at) VALUES (?, ?)").run(addr, Math.floor(Date.now() / 1000));
-  return (db.prepare("SELECT id FROM users WHERE address = ?").get(addr) as { id: number }).id;
+  const id = (db.prepare("SELECT id FROM users WHERE address = ?").get(addr) as { id: number }).id;
+  recordActivity(db, "join", { userId: id, address: addr });
+  return id;
 }
 
 // Display identity: 0x1234...abcd
@@ -194,6 +204,10 @@ export async function buy(db: DatabaseSync, userId: number, pair: string, token:
      VALUES (?, ?, ?, ?, 'buy', ?, ?, ?, ?, ?, ?)`
   ).run(userId, seasonId, q.pair, q.tokenOut.toLowerCase(), String(usdAmount), q.amountOut.toString(), execPriceUsd, q.priceImpactPct, feeUsd, Math.floor(Date.now() / 1000));
   const tradeId = Number((db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number }).id);
+  recordActivity(db, "trade", {
+    userId, token: q.tokenOut, symbol: symbolForToken(db, q.tokenOut),
+    data: { side: "buy", usd: usdAmount, qtyDec: tokensOutDec },
+  });
   return { tradeId, quote: q, tokensOut: q.amountOut, execPriceUsd };
 }
 
@@ -224,6 +238,18 @@ export async function sell(db: DatabaseSync, userId: number, pair: string, token
      VALUES (?, ?, ?, ?, 'sell', ?, ?, ?, ?, ?, ?, ?)`
   ).run(userId, seasonId, q.pair, token.toLowerCase(), tokenQty.toString(), String(usdOut), execPriceUsd, q.priceImpactPct, feeUsd, realizedPnlUsd, Math.floor(Date.now() / 1000));
   const tradeId = Number((db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number }).id);
+  const symbol = symbolForToken(db, token);
+  recordActivity(db, "trade", {
+    userId, token, symbol,
+    data: { side: "sell", usd: usdOut, qtyDec, pnlUsd: realizedPnlUsd },
+  });
+  const pnlPct = costBasis > 0 ? (realizedPnlUsd / costBasis) * 100 : 0;
+  if (pnlPct >= 50) {
+    recordActivity(db, "big_win", {
+      userId, token, symbol,
+      data: { pnlUsd: realizedPnlUsd, pnlPct },
+    });
+  }
   return { tradeId, quote: q, usdOut, realizedPnlUsd };
 }
 

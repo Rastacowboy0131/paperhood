@@ -2,6 +2,7 @@
 // the badges table (insert-once, never revoked). Recompute is cheap: a single
 // pass over the user's trades, run after each trade or order fill.
 import { DatabaseSync } from "node:sqlite";
+import { recordActivity } from "./activity.js";
 
 export interface BadgeDef {
   key: string;
@@ -19,6 +20,9 @@ export const BADGE_DEFS: BadgeDef[] = [
   { key: "streak_10", label: "Untouchable", emoji: "👑", desc: "10 winning trades in a row" },
   { key: "survivor_50", label: "Survivor", emoji: "🩹", desc: "Closed a trade at -50% or worse and lived to tell" },
   { key: "first_2x", label: "2x Club", emoji: "🚀", desc: "First 2x on a single trade" },
+  { key: "quest_streak_3", label: "Warming Up", emoji: "🔥", desc: "Complete all daily quests 3 days in a row" },
+  { key: "quest_streak_7", label: "On Fire", emoji: "🎯", desc: "Complete all daily quests 7 days in a row" },
+  { key: "quest_streak_30", label: "Iron Discipline", emoji: "🏆", desc: "Complete all daily quests 30 days in a row" },
 ];
 
 const DEF_BY_KEY = new Map(BADGE_DEFS.map((b) => [b.key, b]));
@@ -75,7 +79,11 @@ export function checkBadges(db: DatabaseSync, userId: number): string[] {
   }
 
   const ins = db.prepare("INSERT OR IGNORE INTO badges (user_id, badge, earned_at) VALUES (?, ?, ?)");
-  for (const a of award) ins.run(userId, a.key, a.ts);
+  for (const a of award) {
+    ins.run(userId, a.key, a.ts);
+    const def = DEF_BY_KEY.get(a.key);
+    recordActivity(db, "badge", { userId, data: { badge: a.key, label: def?.label, emoji: def?.emoji } });
+  }
   return award.map((a) => a.key);
 }
 

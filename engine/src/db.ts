@@ -192,6 +192,21 @@ CREATE TABLE IF NOT EXISTS trade_notes (
 CREATE INDEX IF NOT EXISTS idx_notes_user ON trade_notes(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_notes_user_token ON trade_notes(user_id, token_address);
 `);
+
+  // Platform activity feed (engine/src/activity.ts).
+  db.exec(`
+CREATE TABLE IF NOT EXISTS activity (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  type TEXT NOT NULL,
+  user_id INTEGER,
+  address TEXT,
+  token_address TEXT,
+  symbol TEXT,
+  data TEXT,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_activity_ts ON activity(ts);
+`);
 }
 
 function migrateWeeklySeasonsToMonthly(db: DatabaseSync): void {

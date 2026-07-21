@@ -11,6 +11,8 @@ import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd, season
 import { createOrder, listOrders, cancelOrder, updateOrderTrigger, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
 import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, seasonLeaderboard, seasonArchive, LeaderboardWindow, LeaderboardMetric } from "../../engine/src/leaderboard.js";
 import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../engine/src/badges.js";
+import { questProgress, questStreak, checkQuestBadges, utcDayStart } from "../../engine/src/quests.js";
+import { listActivity } from "../../engine/src/activity.js";
 import { getWatchlist, addWatch, removeWatch, createNote, updateNote, deleteNote, listNotes, NOTE_MAX_CHARS } from "../../engine/src/social.js";
 import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
@@ -23,6 +25,7 @@ import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.
 import { backfillPairHistory } from "../../engine/src/backfill.js";
 import { ponsGraduation } from "../../engine/src/pons.js";
 import { buildRecap, RecapWindow } from "../../engine/src/recap.js";
+import { tokenPaperStats, paperHolderCounts } from "../../engine/src/paperstats.js";
 import { WsHub } from "./ws.js";
 
 export interface BuildOpts {
@@ -201,6 +204,31 @@ export async function buildServer(opts: BuildOpts = {}) {
     }
   });
 
+  // Paper stats for a token: open paper holders, average entry, paper volume.
+  // Cheap enough per token; cached briefly to keep hot pages light.
+  const paperStatsCache = new Map<string, { at: number; body: unknown }>();
+  app.get("/tokens/:address/paper-stats", async (req, reply) => {
+    const { address } = req.params as { address: string };
+    const pool = poolForToken(db, address);
+    if (!pool) return reply.code(404).send({ error: "token not in universe" });
+    const key = pool.token_address.toLowerCase();
+    const hit = paperStatsCache.get(key);
+    if (hit && Date.now() - hit.at < 15000) return hit.body;
+    const totalSupply = (pool as { total_supply?: number | null }).total_supply ?? null;
+    const body = tokenPaperStats(db, pool.token_address, totalSupply);
+    paperStatsCache.set(key, { at: Date.now(), body });
+    return body;
+  });
+
+  // Bulk paper holder counts (screener "most papered" sort). Cached ~60s.
+  let paperCountsCache: { at: number; body: unknown } | null = null;
+  app.get("/paper-stats", async () => {
+    if (paperCountsCache && Date.now() - paperCountsCache.at < 60000) return paperCountsCache.body;
+    const body = { tokens: paperHolderCounts(db) };
+    paperCountsCache = { at: Date.now(), body };
+    return body;
+  });
+
   app.get("/tokens/:address/paper-trades", async (req, reply) => {
     const { address } = req.params as { address: string };
     const pool = poolForToken(db, address);
@@ -306,6 +334,7 @@ export async function buildServer(opts: BuildOpts = {}) {
   // forget so trades stay fast.
   function afterTrade(userId: number): void {
     try { checkBadges(db, userId); } catch (e) { app.log.error(e, "badge check failed"); }
+    try { checkQuestBadges(db, userId); } catch (e) { app.log.error(e, "quest badge check failed"); }
     snapshotUser(db, userId, true).catch((e) => app.log.error(e, "equity snapshot failed"));
   }
 
@@ -412,6 +441,35 @@ export async function buildServer(opts: BuildOpts = {}) {
     checkBadges(db, user.userId);
     return { defs: BADGE_DEFS, badges: getUserBadges(db, user.userId) };
   });
+
+  // Daily quests for the signed-in user: today's 3 quests with progress,
+  // plus the completion streak. Streak badges are checked here too so a
+  // day completed by a journal note (no trade) still awards them.
+  app.get("/quests/me", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    const dayStart = utcDayStart();
+    const quests = questProgress(db, user.userId, dayStart);
+    const s = questStreak(db, user.userId);
+    try { checkQuestBadges(db, user.userId, s.streak); } catch { /* best effort */ }
+    return {
+      dayStart,
+      dayEnd: dayStart + 86400,
+      quests,
+      streak: s.streak,
+      todayDone: s.todayDone,
+    };
+  });
+
+  // ---------- activity feed (public) ----------
+
+  let activityCache: { at: number; body: unknown } | null = null;
+  app.get("/activity", async () => {
+    if (activityCache && Date.now() - activityCache.at < 5000) return activityCache.body;
+    const body = { events: listActivity(db, 50) };
+    activityCache = { at: Date.now(), body };
+    return body;
+  });
+
 
   // ---------- limit / stop orders (authed) ----------
 
