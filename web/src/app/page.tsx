@@ -11,6 +11,8 @@ import Leaderboard from "@/components/Leaderboard";
 import { TokenLogo } from "@/components/TokenLogo";
 import { SocialLinks } from "@/components/SocialLinks";
 import { useWatchlist } from "@/lib/watchlist";
+import { QuestsCompact } from "@/components/QuestsPanel";
+import { ActivityFeed } from "@/components/ActivityFeed";
 
 type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd" | "priceUsd" | "paperHolders";
 
@@ -155,6 +157,9 @@ export default function Screener() {
   return (
     <div>
       <Leaderboard />
+      <div className="mb-3">
+        <QuestsCompact />
+      </div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           id="screener-search"
@@ -333,6 +338,9 @@ export default function Screener() {
             )}
           </tbody>
         </table>
+      </div>
+      <div className="mt-4">
+        <ActivityFeed />
       </div>
     </div>
   );

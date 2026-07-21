@@ -40,10 +40,15 @@ const config: Config = {
           "0%": { backgroundColor: "rgb(var(--term-red) / 0.10)" },
           "100%": { backgroundColor: "transparent" },
         },
+        feedIn: {
+          "0%": { opacity: "0", transform: "translateY(-4px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
       },
       animation: {
         "flash-up": "flashUp 0.8s ease-out",
         "flash-down": "flashDown 0.8s ease-out",
+        "feed-in": "feedIn 0.4s ease-out",
       },
     },
   },
