@@ -47,7 +47,7 @@ function AddrLink({ addr, explorer, path = "address" }: { addr: string; explorer
   );
 }
 
-const thCls = "px-2 py-1.5 text-left font-normal text-term-dim";
+const thCls = "px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wider text-term-dim";
 const tdCls = "px-2 py-1 whitespace-nowrap";
 
 export function TokenInfoTabs({ address, symbol }: { address: string; symbol: string }) {
@@ -104,13 +104,13 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
   }, [tab, address]);
 
   return (
-    <div className="mt-4 rounded border border-term-border bg-term-panel">
+    <div className="panel mt-4">
       <div className="flex gap-1 border-b border-term-border p-2">
         {TABS.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`rounded px-3 py-1 text-xs ${tab === t.id ? "bg-term-accent text-black" : "text-term-dim hover:text-term-text"}`}
+            className={`tab ${tab === t.id ? "tab-active" : ""}`}
           >
             {t.label}
           </button>
@@ -141,7 +141,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {trades.map((t, i) => (
-                  <tr key={`${t.txHash}-${i}`} className="border-b border-term-border/40 last:border-0">
+                  <tr key={`${t.txHash}-${i}`} className="border-b border-term-border/40 transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{timeAgo(t.ts)}</td>
                     <td className={`${tdCls} ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>
                       {t.side.toUpperCase()}
@@ -178,7 +178,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {topTraders.map((t, i) => (
-                  <tr key={t.wallet} className="border-b border-term-border/40 last:border-0">
+                  <tr key={t.wallet} className="border-b border-term-border/40 transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{i + 1}</td>
                     <td className={tdCls}><AddrLink addr={t.wallet} explorer={explorer} /></td>
                     <td className={`${tdCls} text-right text-term-green`}>{t.buys}</td>
@@ -212,7 +212,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {holders.map((h, i) => (
-                  <tr key={h.address} className="border-b border-term-border/40 last:border-0">
+                  <tr key={h.address} className="border-b border-term-border/40 transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{i + 1}</td>
                     <td className={tdCls}>
                       <AddrLink addr={h.address} explorer={explorer} />
@@ -249,7 +249,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {paper.map((t) => (
-                  <tr key={t.id} className="border-b border-term-border/40 last:border-0">
+                  <tr key={t.id} className="border-b border-term-border/40 transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{timeAgo(t.ts)}</td>
                     <td className={tdCls}>{t.display}</td>
                     <td className={`${tdCls} ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>

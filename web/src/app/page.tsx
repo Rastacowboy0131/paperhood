@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, TokenRow, fmtUsd, fmtCompact, fmtMcap } from "@/lib/api";
 import { useLivePrices } from "@/lib/ws";
@@ -16,6 +16,7 @@ export default function Screener() {
   const router = useRouter();
   const [tokens, setTokens] = useState<TokenRow[]>([]);
   const [ethUsd, setEthUsd] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("liquidityUsd");
@@ -31,11 +32,27 @@ export default function Screener() {
         setTokens(r.tokens);
         setEthUsd(r.ethUsd);
       })
-      .catch((e) => setErr(e.message));
+      .catch((e) => setErr(e.message))
+      .finally(() => setLoading(false));
   }, []);
 
   const addrs = useMemo(() => tokens.map((t) => t.address), [tokens]);
   const live = useLivePrices(addrs);
+
+  // Track previous live prices to flash rows on change.
+  const prevPrices = useRef<Record<string, number>>({});
+  const flashes = useMemo(() => {
+    const out: Record<string, "up" | "down"> = {};
+    for (const [addr, lp] of Object.entries(live)) {
+      if (lp?.price == null) continue;
+      const prev = prevPrices.current[addr];
+      if (prev != null && lp.price !== prev) {
+        out[addr] = lp.price > prev ? "up" : "down";
+      }
+      prevPrices.current[addr] = lp.price;
+    }
+    return out;
+  }, [live]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -69,7 +86,7 @@ export default function Screener() {
   function th(key: SortKey, label: string, right = true) {
     return (
       <th
-        className={`cursor-pointer select-none px-3 py-2 ${right ? "text-right" : "text-left"} text-term-dim hover:text-term-text`}
+        className={`th cursor-pointer select-none ${right ? "text-right" : "text-left"} hover:text-term-text`}
         onClick={() => {
           if (sortKey === key) setSortDesc(!sortDesc);
           else {
@@ -87,79 +104,96 @@ export default function Screener() {
   return (
     <div>
       <Leaderboard />
-      <div className="mb-3 flex items-center gap-3">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search symbol, name, or address"
-          className="w-72 rounded border border-term-border bg-term-panel px-3 py-1.5 text-sm outline-none focus:border-term-accent"
+          className="input w-72"
         />
         <button
           onClick={() => setDenom(denom === "usd" ? "eth" : "usd")}
-          className="rounded border border-term-border px-3 py-1.5 text-sm text-term-dim hover:text-term-text"
+          className="btn btn-ghost"
         >
           Price: {denom.toUpperCase()}
         </button>
         <button
           onClick={() => setHideInactive(!hideInactive)}
-          className={`rounded border border-term-border px-3 py-1.5 text-sm hover:text-term-text ${hideInactive ? "text-term-accent" : "text-term-dim"}`}
+          className={`btn btn-ghost ${hideInactive ? "border-term-accent/50 text-term-accent hover:text-term-accent" : ""}`}
           title={`Hide pools with under $${MIN_ACTIVE_VOL} 24h volume`}
         >
           {hideInactive ? "Active only" : "All pools"}
         </button>
-        <span className="ml-auto text-xs text-term-dim">
+        <span className="num ml-auto text-xs text-term-dim">
           {rows.length} tokens · ETH ${fmtUsd(ethUsd, 2)}
         </span>
       </div>
       {err && <div className="mb-3 text-sm text-term-red">API error: {err}</div>}
-      <div className="overflow-x-auto rounded border border-term-border">
-        <table className="w-full text-sm">
-          <thead className="bg-term-panel">
+      <div className="panel overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead className="sticky top-12 z-10 bg-term-panel">
             <tr>
               {th("symbol", "Token", false)}
               {th("mcapUsd", "MCap")}
               {th("change24hPct", "24h")}
               {th("liquidityUsd", "Liquidity")}
               {th("volume24hUsd", "Volume 24h")}
-              <th className="px-3 py-2 text-right text-term-dim">Pool</th>
+              <th className="th text-right">Pool</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((t) => (
-              <tr
-                key={t.address}
-                onClick={() => router.push(`/t/${t.address}`)}
-                className="cursor-pointer border-t border-term-border hover:bg-term-panel"
-              >
-                <td className="px-3 py-2">
-                  <div className="max-w-[240px] truncate whitespace-nowrap">
-                    <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
-                    <span className="text-term-dim">{(t.name || "").slice(0, 40)}</span>
-                  </div>
-                </td>
-                <td className="num px-3 py-2 text-right">
-                  {denom === "usd"
-                    ? fmtMcap(t.mcapUsd)
-                    : t.mcapUsd != null && ethUsd > 0
-                      ? `${fmtCompact(t.mcapUsd / ethUsd)} ETH`
-                      : "-"}
-                </td>
-                <td
-                  className={`num px-3 py-2 text-right ${(t.change24hPct ?? 0) >= 0 ? "text-term-green" : "text-term-red"}`}
+            {rows.map((t) => {
+              const flash = flashes[t.address.toLowerCase()];
+              return (
+                <tr
+                  key={t.address}
+                  onClick={() => router.push(`/t/${t.address}`)}
+                  className={`cursor-pointer border-t border-term-border/60 transition-colors hover:bg-term-hover ${
+                    flash === "up" ? "animate-flash-up" : flash === "down" ? "animate-flash-down" : ""
+                  }`}
                 >
-                  {t.change24hPct != null ? `${t.change24hPct >= 0 ? "+" : ""}${t.change24hPct.toFixed(2)}%` : "-"}
-                </td>
-                <td className="num px-3 py-2 text-right">${fmtCompact(t.liquidityUsd)}</td>
-                <td className="num px-3 py-2 text-right">${fmtCompact(t.volume24hUsd)}</td>
-                <td className="px-3 py-2 text-right text-xs text-term-dim">
-                  {t.dex} {t.version}
-                </td>
-              </tr>
-            ))}
-            {!rows.length && !err && (
+                  <td className="px-3 py-1.5">
+                    <div className="max-w-[240px] truncate whitespace-nowrap">
+                      <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
+                      <span className="text-term-dim">{(t.name || "").slice(0, 40)}</span>
+                    </div>
+                  </td>
+                  <td className="num px-3 py-1.5 text-right">
+                    {denom === "usd"
+                      ? fmtMcap(t.mcapUsd)
+                      : t.mcapUsd != null && ethUsd > 0
+                        ? `${fmtCompact(t.mcapUsd / ethUsd)} ETH`
+                        : "-"}
+                  </td>
+                  <td
+                    className={`num px-3 py-1.5 text-right ${(t.change24hPct ?? 0) >= 0 ? "text-term-green" : "text-term-red"}`}
+                  >
+                    {t.change24hPct != null ? `${t.change24hPct >= 0 ? "+" : ""}${t.change24hPct.toFixed(2)}%` : "-"}
+                  </td>
+                  <td className="num px-3 py-1.5 text-right">${fmtCompact(t.liquidityUsd)}</td>
+                  <td className="num px-3 py-1.5 text-right">${fmtCompact(t.volume24hUsd)}</td>
+                  <td className="px-3 py-1.5 text-right text-xs text-term-dim">
+                    {t.dex} {t.version}
+                  </td>
+                </tr>
+              );
+            })}
+            {loading &&
+              !rows.length &&
+              Array.from({ length: 8 }).map((_, i) => (
+                <tr key={`sk-${i}`} className="border-t border-term-border/60">
+                  {Array.from({ length: 6 }).map((_, j) => (
+                    <td key={j} className="px-3 py-2">
+                      <div className={`skeleton h-3.5 ${j === 0 ? "w-32" : "ml-auto w-16"}`} />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            {!loading && !rows.length && !err && (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-term-dim">
-                  Loading universe...
+                <td colSpan={6} className="px-3 py-10 text-center text-term-dim">
+                  <div className="text-lg">◎</div>
+                  <div className="mt-1 text-xs">No tokens match</div>
                 </td>
               </tr>
             )}

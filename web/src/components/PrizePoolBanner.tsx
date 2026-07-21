@@ -45,7 +45,7 @@ export default function PrizePoolBanner({ window: win }: { window: "1d" | "7d" |
 
   if (win === "all") {
     return (
-      <div className="mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded border border-term-border bg-term-panel px-4 py-2 text-xs text-term-dim">
+      <div className="panel mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 text-xs text-term-dim">
         <span>
           Daily prize pool{" "}
           <span className="num font-bold text-term-accent">${fmtUsd(pool.dailyUsd, 2)}</span>
@@ -65,13 +65,13 @@ export default function PrizePoolBanner({ window: win }: { window: "1d" | "7d" |
   const endsAt = daily ? pool.dayEndsAt : pool.weekEndsAt;
 
   return (
-    <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded border border-term-border bg-term-panel px-4 py-3">
-      <span className="text-sm text-term-dim">
+    <div className="panel mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3">
+      <span className="text-[11px] uppercase tracking-wider text-term-dim">
         {daily ? "Daily prize pool" : "Weekly prize pool"}
       </span>
-      <span className="num text-2xl font-bold text-term-accent">${fmtUsd(amount, 2)}</span>
+      <span className="num text-xl font-bold text-term-accent">${fmtUsd(amount, 2)}</span>
       {!daily && <span className="text-xs text-term-dim">top 3 split</span>}
-      <span className="ml-auto text-xs text-term-dim">
+      <span className="num ml-auto text-xs text-term-dim">
         {daily ? "resets 00:00 UTC" : "week ends"} · {countdown(endsAt, now)} left
       </span>
     </div>

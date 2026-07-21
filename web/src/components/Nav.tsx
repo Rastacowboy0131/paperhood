@@ -16,59 +16,55 @@ export function Nav() {
   const { address, loading, signingIn, error, signIn, devSignIn, signOut } = useAuth();
 
   return (
-    <header className="border-b border-term-border bg-term-panel">
-      <div className="mx-auto flex max-w-7xl items-center gap-6 px-4 py-2.5">
-        <Link href="/" className="text-lg font-bold tracking-tight">
-          <span className="text-term-accent">Paper</span>Hood{" "}
-          <span className="text-sm">🏹</span>
+    <header className="sticky top-0 z-20 border-b border-term-border bg-term-bg/95 backdrop-blur">
+      <div className="mx-auto flex h-12 max-w-7xl items-center gap-6 px-4">
+        <Link href="/" className="flex items-baseline gap-1 text-[15px] font-bold tracking-tight">
+          <span className="text-term-accent">Paper</span>
+          <span>Hood</span>
+          <span className="text-xs">🏹</span>
         </Link>
-        <nav className="flex gap-4 text-sm">
+        <nav className="flex h-full items-stretch gap-1 text-[13px]">
           {links.map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className={
+              className={`flex items-center border-b-2 px-2.5 transition-colors ${
                 path === l.href
-                  ? "text-term-accent"
-                  : "text-term-dim hover:text-term-text"
-              }
+                  ? "border-term-accent text-term-text"
+                  : "border-transparent text-term-dim hover:text-term-text"
+              }`}
             >
               {l.label}
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-3 text-sm">
+        <div className="ml-auto flex items-center gap-2 text-sm">
           {error && (
             <span className="max-w-96 break-words text-xs leading-tight text-term-red" title={error}>
               {error}
             </span>
           )}
           {loading ? (
-            <span className="text-term-dim">...</span>
+            <span className="skeleton h-6 w-24" />
           ) : address ? (
             <>
-              <span className="num text-term-accent">{truncAddr(address)}</span>
-              <button
-                onClick={signOut}
-                className="rounded border border-term-border px-2 py-1 text-term-dim hover:text-term-text"
-              >
+              <span className="num rounded border border-term-border bg-term-panel px-2 py-1 text-xs text-term-accent">
+                {truncAddr(address)}
+              </span>
+              <button onClick={signOut} className="btn btn-ghost">
                 Sign out
               </button>
             </>
           ) : (
             <>
-              <button
-                onClick={signIn}
-                disabled={signingIn}
-                className="rounded bg-term-accent px-3 py-1 font-medium text-black hover:opacity-90 disabled:opacity-50"
-              >
+              <button onClick={signIn} disabled={signingIn} className="btn btn-primary">
                 {signingIn ? "Signing..." : "Connect wallet"}
               </button>
               {DEV_AUTH && (
                 <button
                   onClick={devSignIn}
                   disabled={signingIn}
-                  className="rounded border border-term-amber px-2 py-1 text-term-amber hover:bg-term-amber hover:text-black"
+                  className="btn border border-term-amber/60 text-term-amber hover:bg-term-amber hover:text-black"
                 >
                   Dev login
                 </button>

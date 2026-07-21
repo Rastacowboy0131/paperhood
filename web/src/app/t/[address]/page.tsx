@@ -236,7 +236,18 @@ export default function TradePage() {
       </div>
     );
   }
-  if (!detail) return <div className="py-12 text-center text-term-dim">Loading...</div>;
+  if (!detail)
+    return (
+      <div className="grid gap-4 py-2 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-3">
+          <div className="skeleton h-6 w-64" />
+          <div className="skeleton h-[420px] w-full" />
+        </div>
+        <div className="space-y-3">
+          <div className="skeleton h-48 w-full" />
+        </div>
+      </div>
+    );
 
   const decimals = detail.decimals ?? 18;
   const quoteOutDec = quote ? Number(quote.amountOut) / 10 ** (side === "buy" ? decimals : 18) : null;
@@ -273,7 +284,7 @@ export default function TradePage() {
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <div>
         <div className="mb-3 flex flex-wrap items-baseline gap-3">
-          <h1 className="text-xl font-bold">{detail.symbol}</h1>
+          <h1 className="text-lg font-bold">{detail.symbol}</h1>
           <span className="text-term-dim">{detail.name}</span>
           <span className="num text-lg">
             {denom === "eth"
@@ -290,7 +301,7 @@ export default function TradePage() {
               {detail.change24hPct.toFixed(2)}% 24h
             </span>
           )}
-          <span className="ml-auto text-xs text-term-dim">
+          <span className="num ml-auto text-xs text-term-dim">
             {detail.mcapUsd != null && <>mcap {fmtMcap(detail.mcapUsd)} · </>}
             {detail.pool.dex} {detail.pool.version} · liq ${fmtCompact(detail.pool.liquidityUsd)} · vol $
             {fmtCompact(detail.pool.volume24hUsd)} · pool {truncAddr(detail.pool.pair)}
@@ -301,7 +312,7 @@ export default function TradePage() {
             <button
               key={x}
               onClick={() => setTf(x)}
-              className={`rounded px-3 py-1 text-xs ${tf === x ? "bg-term-accent text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
+              className={`tab ${tf === x ? "tab-active" : ""}`}
             >
               {x}
             </button>
@@ -312,19 +323,19 @@ export default function TradePage() {
               key={m}
               onClick={() => setMetric(m)}
               disabled={m === "mcap" && detail.totalSupply == null}
-              className={`rounded px-3 py-1 text-xs disabled:opacity-40 ${metric === m ? "bg-term-accent text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
+              className={`tab disabled:opacity-40 ${metric === m ? "tab-active" : ""}`}
             >
               {m === "price" ? "Price" : "MCap"}
             </button>
           ))}
           <button
             onClick={() => setDenom(denom === "usd" ? "eth" : "usd")}
-            className="ml-auto rounded border border-term-border px-3 py-1 text-xs text-term-dim hover:text-term-text"
+            className="btn btn-ghost ml-auto"
           >
             {denom.toUpperCase()}
           </button>
         </div>
-        <div className="rounded border border-term-border">
+        <div className="panel overflow-hidden">
           {candles.length ? (
             <CandleChart
               candles={candles}
@@ -343,17 +354,17 @@ export default function TradePage() {
       </div>
 
       <div className="space-y-4">
-        <div className="rounded border border-term-border bg-term-panel p-4">
+        <div className="panel p-4">
           <div className="mb-3 flex gap-1">
             <button
               onClick={() => setSide("buy")}
-              className={`flex-1 rounded py-1.5 text-sm font-semibold ${side === "buy" ? "bg-term-green text-black" : "border border-term-border text-term-dim"}`}
+              className={`flex-1 rounded py-1.5 text-sm font-semibold transition-colors ${side === "buy" ? "bg-term-green text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
             >
               Buy
             </button>
             <button
               onClick={() => setSide("sell")}
-              className={`flex-1 rounded py-1.5 text-sm font-semibold ${side === "sell" ? "bg-term-red text-black" : "border border-term-border text-term-dim"}`}
+              className={`flex-1 rounded py-1.5 text-sm font-semibold transition-colors ${side === "sell" ? "bg-term-red text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
             >
               Sell
             </button>
@@ -375,7 +386,7 @@ export default function TradePage() {
                 value={amountBuy}
                 onChange={(e) => setAmountBuy(e.target.value)}
                 inputMode="decimal"
-                className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-2 outline-none focus:border-term-accent"
+                className="num input mt-1 py-2"
               />
               <span className="mt-2 flex gap-1">
                 {BUY_PRESETS[denom].map((v) => (
@@ -399,7 +410,7 @@ export default function TradePage() {
                 value={sellPct}
                 onChange={(e) => setSellPct(e.target.value)}
                 inputMode="decimal"
-                className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-2 outline-none focus:border-term-accent"
+                className="num input mt-1 py-2"
               />
               <span className="mt-2 flex gap-1">
                 {SELL_PRESETS.map((v) => (
@@ -477,7 +488,7 @@ export default function TradePage() {
             <button
               onClick={executeTrade}
               disabled={trading || !quote || overCap || (side === "sell" && !position)}
-              className={`w-full rounded py-2 font-semibold text-black disabled:opacity-40 ${side === "buy" ? "bg-term-green" : "bg-term-red"}`}
+              className={`w-full rounded py-2 text-sm font-semibold text-black transition-[filter] hover:brightness-110 disabled:opacity-40 ${side === "buy" ? "bg-term-green" : "bg-term-red"}`}
             >
               {trading ? "Executing..." : side === "buy" ? `Buy ${detail.symbol}` : `Sell ${detail.symbol}`}
             </button>
@@ -488,8 +499,8 @@ export default function TradePage() {
         </div>
 
         {position && (
-          <div className="rounded border border-term-border bg-term-panel p-4 text-sm">
-            <div className="mb-2 font-semibold">Your position</div>
+          <div className="panel p-4 text-sm">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Your position</div>
             <div className="space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-term-dim">Qty</span>
@@ -527,24 +538,24 @@ export default function TradePage() {
         )}
 
         {user && (
-          <div className="rounded border border-term-border bg-term-panel p-4 text-sm">
-            <div className="mb-2 font-semibold">Orders</div>
+          <div className="panel p-4 text-sm">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Orders</div>
             <div className="mb-2 flex gap-1">
               <button
                 onClick={() => setOrderSide("buy")}
-                className={`flex-1 rounded py-1 text-xs font-semibold ${orderSide === "buy" ? "bg-term-green text-black" : "border border-term-border text-term-dim"}`}
+                className={`flex-1 rounded py-1 text-xs font-semibold transition-colors ${orderSide === "buy" ? "bg-term-green text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
               >
                 Limit buy
               </button>
               <button
                 onClick={() => { setOrderSide("sell"); setOrderType("limit"); }}
-                className={`flex-1 rounded py-1 text-xs font-semibold ${orderSide === "sell" && orderType === "limit" ? "bg-term-green text-black" : "border border-term-border text-term-dim"}`}
+                className={`flex-1 rounded py-1 text-xs font-semibold transition-colors ${orderSide === "sell" && orderType === "limit" ? "bg-term-green text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
               >
                 TP
               </button>
               <button
                 onClick={() => { setOrderSide("sell"); setOrderType("stop"); }}
-                className={`flex-1 rounded py-1 text-xs font-semibold ${orderSide === "sell" && orderType === "stop" ? "bg-term-red text-black" : "border border-term-border text-term-dim"}`}
+                className={`flex-1 rounded py-1 text-xs font-semibold transition-colors ${orderSide === "sell" && orderType === "stop" ? "bg-term-red text-black" : "border border-term-border text-term-dim hover:text-term-text"}`}
               >
                 SL
               </button>
@@ -568,7 +579,7 @@ export default function TradePage() {
                 onChange={(e) => setOrderTrigger(e.target.value)}
                 inputMode="decimal"
                 placeholder="trigger price"
-                className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-1.5 outline-none focus:border-term-accent"
+                className="num input mt-1"
               />
             </label>
             <label className="mb-2 block text-xs">
@@ -577,7 +588,7 @@ export default function TradePage() {
                 value={orderAmount}
                 onChange={(e) => setOrderAmount(e.target.value)}
                 inputMode="decimal"
-                className="num mt-1 w-full rounded border border-term-border bg-term-bg px-3 py-1.5 outline-none focus:border-term-accent"
+                className="num input mt-1"
               />
               {orderSide === "sell" && (
                 <span className="mt-1 flex gap-1">
@@ -597,7 +608,7 @@ export default function TradePage() {
             <button
               onClick={placeOrder}
               disabled={placing || !parseFloat(orderTrigger) || !parseFloat(orderAmount) || (orderSide === "sell" && !position)}
-              className="w-full rounded bg-term-accent py-1.5 text-xs font-semibold text-black disabled:opacity-40"
+              className="btn btn-primary w-full py-1.5"
             >
               {placing ? "Placing..." : "Place order"}
             </button>
@@ -605,7 +616,7 @@ export default function TradePage() {
 
             {openOrders.length > 0 && (
               <div className="mt-3 space-y-1 text-xs">
-                <div className="text-term-dim">Open</div>
+                <div className="text-[11px] uppercase tracking-wider text-term-dim">Open</div>
                 {openOrders.map((o) => (
                   <div key={o.id} className="flex items-center justify-between rounded bg-term-bg px-2 py-1">
                     <span className={`num ${o.side === "buy" || o.type === "limit" ? "text-term-green" : "text-term-red"}`}>
@@ -624,7 +635,7 @@ export default function TradePage() {
             )}
             {pastOrders.length > 0 && (
               <div className="mt-3 space-y-1 text-xs">
-                <div className="text-term-dim">Recent</div>
+                <div className="text-[11px] uppercase tracking-wider text-term-dim">Recent</div>
                 {pastOrders.map((o) => (
                   <div key={o.id} className="flex items-center justify-between rounded px-2 py-1 text-term-dim">
                     <span className="num">{o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP"}</span>

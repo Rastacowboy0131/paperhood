@@ -34,14 +34,14 @@ function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
   const elevate = rank === 1 ? "sm:-translate-y-3 sm:scale-105" : "";
   return (
     <div
-      className={`flex flex-1 flex-col items-center rounded-lg border ${accent} bg-term-panel px-4 py-5 transition-transform ${elevate}`}
+      className={`flex flex-1 flex-col items-center rounded-md border ${accent} bg-term-panel px-4 py-4 transition-transform ${elevate}`}
     >
-      <div className="text-3xl">{medal}</div>
-      <div className="mt-1 text-xs text-term-dim">#{rank}</div>
+      <div className="text-2xl">{medal}</div>
+      <div className="mt-0.5 text-[11px] uppercase tracking-wider text-term-dim">#{rank}</div>
       {entry ? (
         <>
           <div className="num mt-2 text-sm">{entry.display}</div>
-          <div className={`num mt-1 text-xl font-bold ${pnlColor(entry.realizedPnlUsd)}`}>
+          <div className={`num mt-1 text-lg font-bold ${pnlColor(entry.realizedPnlUsd)}`}>
             {pnlStr(entry.realizedPnlUsd)}
           </div>
           <div className={`num text-xs ${pnlColor(entry.pnlPct)}`}>
@@ -91,8 +91,8 @@ export default function Leaderboard() {
   return (
     <div className="mb-6">
       <div className="mb-3 flex items-center gap-2">
-        <h2 className="text-base font-bold">Leaderboard</h2>
-        <span className="text-xs text-term-dim">realized PnL</span>
+        <h2 className="text-sm font-bold">Leaderboard</h2>
+        <span className="text-[11px] uppercase tracking-wider text-term-dim">realized PnL</span>
         <div className="ml-auto flex gap-1">
           {TABS.map((t) => (
             <button
@@ -101,11 +101,7 @@ export default function Leaderboard() {
                 setWin(t.key);
                 localStorage.setItem(LS_KEY, t.key);
               }}
-              className={`rounded px-3 py-1 text-sm ${
-                win === t.key
-                  ? "bg-term-accent text-black"
-                  : "border border-term-border text-term-dim hover:text-term-text"
-              }`}
+              className={`tab ${win === t.key ? "tab-active" : ""}`}
             >
               {t.label}
             </button>
@@ -123,11 +119,11 @@ export default function Leaderboard() {
             <PodiumCard entry={top3[2]} rank={3} />
           </div>
           {rest.length > 0 && (
-            <div className="mt-3 overflow-hidden rounded border border-term-border">
+            <div className="panel mt-3 overflow-hidden">
               {rest.map((e, i) => (
                 <div
                   key={e.userId}
-                  className="flex items-center gap-3 border-t border-term-border bg-term-panel/50 px-3 py-1.5 text-sm first:border-t-0"
+                  className="flex items-center gap-3 border-t border-term-border/60 px-3 py-1.5 text-[13px] transition-colors first:border-t-0 hover:bg-term-hover"
                 >
                   <span className="num w-6 text-term-dim">{i + 4}</span>
                   <span className="num">{e.display}</span>
@@ -145,8 +141,9 @@ export default function Leaderboard() {
           )}
         </>
       ) : (
-        <div className="rounded border border-term-border bg-term-panel px-3 py-6 text-center text-sm text-term-dim">
-          No closed trades in this window yet. Be the first on the podium.
+        <div className="panel px-3 py-8 text-center text-term-dim">
+          <div className="text-lg">🏆</div>
+          <div className="mt-1 text-xs">No closed trades in this window yet. Be the first on the podium.</div>
         </div>
       )}
     </div>

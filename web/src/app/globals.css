@@ -3,11 +3,55 @@
 @tailwind utilities;
 
 body {
-  @apply bg-term-bg text-term-text;
+  @apply bg-term-bg font-sans text-[13px] text-term-text antialiased;
 }
 
 .num {
   @apply font-mono tabular-nums;
+}
+
+@layer components {
+  /* Panel: the one surface style used everywhere. */
+  .panel {
+    @apply rounded-md border border-term-border bg-term-panel;
+  }
+  .panel-header {
+    @apply flex items-center gap-2 border-b border-term-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim;
+  }
+
+  /* Table micro-header cells. */
+  .th {
+    @apply whitespace-nowrap px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-term-dim;
+  }
+
+  /* Tabs: single style app-wide (pill, accent-tinted when active). */
+  .tab {
+    @apply rounded px-2.5 py-1 text-xs text-term-dim transition-colors hover:text-term-text focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent;
+  }
+  .tab-active {
+    @apply bg-term-accent/15 text-term-accent hover:text-term-accent;
+  }
+
+  /* Buttons. */
+  .btn {
+    @apply rounded px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent disabled:opacity-40;
+  }
+  .btn-ghost {
+    @apply border border-term-border text-term-dim hover:border-term-dim/50 hover:text-term-text;
+  }
+  .btn-primary {
+    @apply bg-term-accent font-semibold text-black hover:brightness-110;
+  }
+
+  /* Inputs. */
+  .input {
+    @apply w-full rounded border border-term-border bg-term-bg px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-term-dim/60 focus:border-term-accent;
+  }
+
+  /* Skeleton loader block. */
+  .skeleton {
+    @apply animate-pulse rounded bg-term-border/50;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -15,9 +59,12 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0e12;
+  background: #0b0e11;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e2a36;
+  background: #1e2730;
   border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a3540;
 }

@@ -29,11 +29,40 @@ export default function PortfolioPage() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  if (loading) return <div className="py-12 text-center text-term-dim">Loading...</div>;
+  if (loading)
+    return (
+      <div className="space-y-3 py-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="panel p-3">
+              <div className="skeleton h-3 w-14" />
+              <div className="skeleton mt-2 h-5 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   if (!address)
-    return <div className="py-12 text-center text-term-dim">Connect your wallet to see your portfolio.</div>;
+    return (
+      <div className="py-16 text-center text-term-dim">
+        <div className="text-2xl">🔌</div>
+        <div className="mt-2 text-sm">Connect your wallet to see your portfolio.</div>
+      </div>
+    );
   if (err) return <div className="py-12 text-center text-term-red">{err}</div>;
-  if (!pf) return <div className="py-12 text-center text-term-dim">Loading portfolio...</div>;
+  if (!pf)
+    return (
+      <div className="space-y-3 py-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="panel p-3">
+              <div className="skeleton h-3 w-14" />
+              <div className="skeleton mt-2 h-5 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
 
   return (
     <div className="space-y-5">
@@ -55,38 +84,39 @@ export default function PortfolioPage() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-term-dim">OPEN POSITIONS (marked to exit)</h2>
-        <div className="overflow-x-auto rounded border border-term-border">
-          <table className="w-full text-sm">
-            <thead className="bg-term-panel text-term-dim">
+        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Open positions (marked to exit)</h2>
+        <div className="panel overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="bg-term-panel">
               <tr>
-                <th className="px-3 py-2 text-left">Token</th>
-                <th className="px-3 py-2 text-right">Qty</th>
-                <th className="px-3 py-2 text-right">Cost basis</th>
-                <th className="px-3 py-2 text-right">Mark</th>
-                <th className="px-3 py-2 text-right">Unrealized</th>
+                <th className="th text-left">Token</th>
+                <th className="th text-right">Qty</th>
+                <th className="th text-right">Cost basis</th>
+                <th className="th text-right">Mark</th>
+                <th className="th text-right">Unrealized</th>
               </tr>
             </thead>
             <tbody>
               {pf.positions.map((p) => (
-                <tr key={p.token} className="border-t border-term-border hover:bg-term-panel">
-                  <td className="px-3 py-2">
+                <tr key={p.token} className="border-t border-term-border/60 transition-colors hover:bg-term-hover">
+                  <td className="px-3 py-1.5">
                     <Link href={`/t/${p.token}`} className="font-semibold text-term-accent hover:underline">
                       {p.symbol}
                     </Link>
                   </td>
-                  <td className="num px-3 py-2 text-right">{fmtCompact(p.qtyDec)}</td>
-                  <td className="num px-3 py-2 text-right">${fmtUsd(p.costBasisUsd, 2)}</td>
-                  <td className="num px-3 py-2 text-right">${fmtUsd(p.markUsd, 2)}</td>
-                  <td className={`num px-3 py-2 text-right ${pnlClass(p.unrealizedPnlUsd)}`}>
+                  <td className="num px-3 py-1.5 text-right">{fmtCompact(p.qtyDec)}</td>
+                  <td className="num px-3 py-1.5 text-right">${fmtUsd(p.costBasisUsd, 2)}</td>
+                  <td className="num px-3 py-1.5 text-right">${fmtUsd(p.markUsd, 2)}</td>
+                  <td className={`num px-3 py-1.5 text-right ${pnlClass(p.unrealizedPnlUsd)}`}>
                     {sign(p.unrealizedPnlUsd)}${fmtUsd(p.unrealizedPnlUsd, 2)}
                   </td>
                 </tr>
               ))}
               {!pf.positions.length && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-term-dim">
-                    No open positions. <Link href="/" className="text-term-accent underline">Find a token</Link>
+                  <td colSpan={5} className="px-3 py-8 text-center text-term-dim">
+                    <div className="text-lg">◎</div>
+                    <div className="mt-1 text-xs">No open positions. <Link href="/" className="text-term-accent underline">Find a token</Link></div>
                   </td>
                 </tr>
               )}
@@ -96,50 +126,51 @@ export default function PortfolioPage() {
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-term-dim">TRADE HISTORY (this season)</h2>
-        <div className="overflow-x-auto rounded border border-term-border">
-          <table className="w-full text-sm">
-            <thead className="bg-term-panel text-term-dim">
+        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Trade history (this season)</h2>
+        <div className="panel overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="bg-term-panel">
               <tr>
-                <th className="px-3 py-2 text-left">Time</th>
-                <th className="px-3 py-2 text-left">Side</th>
-                <th className="px-3 py-2 text-left">Token</th>
-                <th className="px-3 py-2 text-right">USD</th>
-                <th className="px-3 py-2 text-right">Fee</th>
-                <th className="px-3 py-2 text-right">Impact</th>
-                <th className="px-3 py-2 text-right">Realized</th>
+                <th className="th text-left">Time</th>
+                <th className="th text-left">Side</th>
+                <th className="th text-left">Token</th>
+                <th className="th text-right">USD</th>
+                <th className="th text-right">Fee</th>
+                <th className="th text-right">Impact</th>
+                <th className="th text-right">Realized</th>
               </tr>
             </thead>
             <tbody>
               {pf.history.map((t) => (
-                <tr key={t.id} className="border-t border-term-border">
-                  <td className="num px-3 py-2 text-xs text-term-dim">
+                <tr key={t.id} className="border-t border-term-border/60 transition-colors hover:bg-term-hover">
+                  <td className="num px-3 py-1.5 text-xs text-term-dim">
                     {new Date(t.ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </td>
-                  <td className={`px-3 py-2 font-semibold ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>
+                  <td className={`px-3 py-1.5 text-xs font-semibold ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>
                     {t.side.toUpperCase()}
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="px-3 py-1.5">
                     <Link href={`/t/${t.token}`} className="text-term-accent hover:underline" title={t.name}>
                       {t.symbol || truncAddr(t.token)}
                     </Link>
                   </td>
-                  <td className="num px-3 py-2 text-right">
+                  <td className="num px-3 py-1.5 text-right">
                     ${fmtUsd(Number(t.side === "buy" ? t.amountIn : t.amountOut), 2)}
                   </td>
-                  <td className="num px-3 py-2 text-right text-term-dim">${fmtUsd(t.feeUsd, 4)}</td>
-                  <td className="num px-3 py-2 text-right text-term-dim">
+                  <td className="num px-3 py-1.5 text-right text-term-dim">${fmtUsd(t.feeUsd, 4)}</td>
+                  <td className="num px-3 py-1.5 text-right text-term-dim">
                     {t.priceImpactPct != null ? `${t.priceImpactPct.toFixed(2)}%` : "-"}
                   </td>
-                  <td className={`num px-3 py-2 text-right ${t.realizedPnlUsd != null ? pnlClass(t.realizedPnlUsd) : "text-term-dim"}`}>
+                  <td className={`num px-3 py-1.5 text-right ${t.realizedPnlUsd != null ? pnlClass(t.realizedPnlUsd) : "text-term-dim"}`}>
                     {t.realizedPnlUsd != null ? `${sign(t.realizedPnlUsd)}$${fmtUsd(t.realizedPnlUsd, 2)}` : "-"}
                   </td>
                 </tr>
               ))}
               {!pf.history.length && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-6 text-center text-term-dim">
-                    No trades yet this season.
+                  <td colSpan={7} className="px-3 py-8 text-center text-term-dim">
+                    <div className="text-lg">◎</div>
+                    <div className="mt-1 text-xs">No trades yet this season.</div>
                   </td>
                 </tr>
               )}
@@ -153,9 +184,9 @@ export default function PortfolioPage() {
 
 function Stat({ label, value, sub, cls }: { label: string; value: string; sub?: string; cls?: string }) {
   return (
-    <div className="rounded border border-term-border bg-term-panel p-3">
-      <div className="text-xs text-term-dim">{label}</div>
-      <div className={`num text-lg font-semibold ${cls || ""}`}>{value}</div>
+    <div className="panel p-3">
+      <div className="text-[11px] uppercase tracking-wider text-term-dim">{label}</div>
+      <div className={`num mt-0.5 text-lg font-semibold ${cls || ""}`}>{value}</div>
       {sub && <div className="num text-xs text-term-dim">{sub}</div>}
     </div>
   );
