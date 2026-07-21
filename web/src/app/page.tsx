@@ -10,6 +10,7 @@ import { useDenom } from "@/lib/denom";
 import Leaderboard from "@/components/Leaderboard";
 import { TokenLogo } from "@/components/TokenLogo";
 import { SocialLinks } from "@/components/SocialLinks";
+import { useWatchlist } from "@/lib/watchlist";
 
 type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd" | "priceUsd";
 
@@ -28,28 +29,13 @@ export default function Screener() {
   const [denom, setDenom] = useDenom();
   // Hide dead pools (flatline charts) by default; toggle to see everything.
   const [hideInactive, setHideInactive] = useState(true);
-  // Starred tokens, persisted locally.
-  const [stars, setStars] = useState<Record<string, boolean>>({});
+  // Server-side watchlist (starred tokens), signed-in users only.
+  const { signedIn, watched: stars, toggle: toggleStar } = useWatchlist();
+  const [watchOnly, setWatchOnly] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   // Trade-any-CA: import state for a pasted contract address.
   const [importing, setImporting] = useState(false);
   const [importErr, setImportErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      const s = localStorage.getItem("stars");
-      if (s) setStars(JSON.parse(s));
-    } catch {}
-  }, []);
-
-  function toggleStar(addr: string) {
-    setStars((prev) => {
-      const next = { ...prev, [addr]: !prev[addr] };
-      if (!next[addr]) delete next[addr];
-      try { localStorage.setItem("stars", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  }
 
   function copyAddr(addr: string) {
     navigator.clipboard?.writeText(addr).then(() => {
@@ -117,8 +103,11 @@ export default function Screener() {
       const mcapUsd = priceUsd != null && t.totalSupply != null ? priceUsd * t.totalSupply : t.mcapUsd;
       return { ...t, priceQuote: lp.price, priceUsd, mcapUsd };
     });
-    if (hideInactive) {
+    if (hideInactive && !watchOnly) {
       list = list.filter((t) => (t.volume24hUsd ?? 0) >= MIN_ACTIVE_VOL);
+    }
+    if (watchOnly) {
+      list = list.filter((t) => stars[t.address.toLowerCase()]);
     }
     if (q) {
       list = list.filter(
@@ -138,7 +127,7 @@ export default function Screener() {
       return sortDesc ? -cmp : cmp;
     });
     return list;
-  }, [tokens, live, ethUsd, search, sortKey, sortDesc, hideInactive, stars]);
+  }, [tokens, live, ethUsd, search, sortKey, sortDesc, hideInactive, stars, watchOnly]);
 
   function th(key: SortKey, label: string, right = true) {
     return (
@@ -181,6 +170,15 @@ export default function Screener() {
         >
           {hideInactive ? "Active only" : "All pools"}
         </button>
+        {signedIn && (
+          <button
+            onClick={() => setWatchOnly(!watchOnly)}
+            className={`btn btn-ghost ${watchOnly ? "border-term-amber/50 text-term-amber hover:text-term-amber" : ""}`}
+            title="Show only starred tokens"
+          >
+            {"\u2605"} Watchlist
+          </button>
+        )}
         <span className="num ml-auto text-xs text-term-dim">
           {rows.length} tokens · ETH ${fmtUsd(ethUsd, 2)}
         </span>
@@ -232,13 +230,15 @@ export default function Screener() {
                   }`}
                 >
                   <td className="px-2 py-2">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleStar(t.address.toLowerCase()); }}
-                      className={starred ? "text-term-amber" : "text-term-faint hover:text-term-dim"}
-                      title={starred ? "Unstar" : "Star"}
-                    >
-                      {starred ? "\u2605" : "\u2606"}
-                    </button>
+                    {signedIn ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleStar(t.address.toLowerCase()); }}
+                        className={starred ? "text-term-amber" : "text-term-faint hover:text-term-dim"}
+                        title={starred ? "Remove from watchlist" : "Add to watchlist"}
+                      >
+                        {starred ? "\u2605" : "\u2606"}
+                      </button>
+                    ) : null}
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
@@ -317,7 +317,7 @@ export default function Screener() {
               <tr>
                 <td colSpan={8} className="px-3 py-10 text-center text-term-dim">
                   <div className="text-lg">◎</div>
-                  <div className="mt-1 text-xs">No tokens match</div>
+                  <div className="mt-1 text-xs">{watchOnly ? "No starred tokens yet. Tap the star on any row to watch it." : "No tokens match"}</div>
                 </td>
               </tr>
             )}

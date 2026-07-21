@@ -11,6 +11,7 @@ import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd, season
 import { createOrder, listOrders, cancelOrder, updateOrderTrigger, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
 import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, seasonLeaderboard, seasonArchive, LeaderboardWindow, LeaderboardMetric } from "../../engine/src/leaderboard.js";
 import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../engine/src/badges.js";
+import { getWatchlist, addWatch, removeWatch, createNote, updateNote, deleteNote, listNotes, NOTE_MAX_CHARS } from "../../engine/src/social.js";
 import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
@@ -242,7 +243,7 @@ export async function buildServer(opts: BuildOpts = {}) {
 
   app.post("/trade", { ...tradeLimit, preHandler: auth }, async (req, reply) => {
     const user = (req as AuthedRequest).user;
-    const body = req.body as { token?: string; side?: string; amount?: string };
+    const body = req.body as { token?: string; side?: string; amount?: string; note?: string };
     if (!body?.token || !body?.side || !body?.amount) {
       return reply.code(400).send({ error: "token, side, amount required" });
     }
@@ -259,6 +260,9 @@ export async function buildServer(opts: BuildOpts = {}) {
         if (!(usd > 0)) return reply.code(400).send({ error: "amount must be a positive USD number for buys" });
         const r = await buy(db, user.userId, pool.pair_address, body.token, usd);
         afterTrade(user.userId);
+        if (body.note && body.note.trim()) {
+          try { createNote(db, user.userId, pool.token_address, body.note, r.tradeId); } catch { /* note is best effort */ }
+        }
         return {
           tradeId: r.tradeId,
           side: "buy",
@@ -275,6 +279,9 @@ export async function buildServer(opts: BuildOpts = {}) {
         try { qty = BigInt(body.amount); } catch { return reply.code(400).send({ error: "amount must be an integer string (raw token units) for sells" }); }
         const r = await sell(db, user.userId, pool.pair_address, body.token, qty);
         afterTrade(user.userId);
+        if (body.note && body.note.trim()) {
+          try { createNote(db, user.userId, pool.token_address, body.note, r.tradeId); } catch { /* note is best effort */ }
+        }
         return {
           tradeId: r.tradeId,
           side: "sell",
@@ -495,6 +502,156 @@ export async function buildServer(opts: BuildOpts = {}) {
       }
     });
   }
+
+  // ---------- watchlist (authed) ----------
+
+  app.get("/watchlist", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    return { watchlist: getWatchlist(db, user.userId) };
+  });
+
+  app.put("/watchlist/:token", { preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const { token } = req.params as { token: string };
+    if (!/^0x[0-9a-fA-F]{40}$/.test(token)) return reply.code(400).send({ error: "invalid token address" });
+    addWatch(db, user.userId, token);
+    return { ok: true };
+  });
+
+  app.delete("/watchlist/:token", { preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const { token } = req.params as { token: string };
+    if (!/^0x[0-9a-fA-F]{40}$/.test(token)) return reply.code(400).send({ error: "invalid token address" });
+    removeWatch(db, user.userId, token);
+    return { ok: true };
+  });
+
+  // ---------- trade journal (authed) ----------
+
+  function serializeNote(n: import("../../engine/src/social.js").NoteRow & { symbol?: string }) {
+    return {
+      id: n.id,
+      token: n.token_address,
+      symbol: n.symbol ?? "?",
+      tradeId: n.trade_id,
+      text: n.text,
+      createdAt: n.created_at,
+      updatedAt: n.updated_at,
+    };
+  }
+
+  app.get("/notes", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    const q = req.query as { token?: string };
+    return { notes: listNotes(db, user.userId, q.token).map(serializeNote), maxChars: NOTE_MAX_CHARS };
+  });
+
+  app.post("/notes", { ...tradeLimit, preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const body = req.body as { token?: string; text?: string; tradeId?: number };
+    if (!body?.token || !body?.text) return reply.code(400).send({ error: "token and text required" });
+    if (!/^0x[0-9a-fA-F]{40}$/.test(body.token)) return reply.code(400).send({ error: "invalid token address" });
+    if (body.text.trim().length === 0) return reply.code(400).send({ error: "note text required" });
+    if (body.text.length > NOTE_MAX_CHARS) return reply.code(400).send({ error: `note too long (max ${NOTE_MAX_CHARS} chars)` });
+    let tradeId: number | null = null;
+    if (body.tradeId != null) {
+      const t = db.prepare("SELECT id FROM trades WHERE id = ? AND user_id = ?").get(Number(body.tradeId), user.userId) as { id: number } | undefined;
+      if (!t) return reply.code(404).send({ error: "trade not found" });
+      tradeId = t.id;
+    }
+    try {
+      const n = createNote(db, user.userId, body.token, body.text, tradeId);
+      return { note: serializeNote(n) };
+    } catch (e) {
+      return reply.code(400).send({ error: (e as Error).message });
+    }
+  });
+
+  app.patch("/notes/:id", { ...tradeLimit, preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const id = Number((req.params as { id: string }).id);
+    const body = req.body as { text?: string };
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "invalid note id" });
+    if (!body?.text || body.text.trim().length === 0) return reply.code(400).send({ error: "note text required" });
+    if (body.text.length > NOTE_MAX_CHARS) return reply.code(400).send({ error: `note too long (max ${NOTE_MAX_CHARS} chars)` });
+    const n = updateNote(db, user.userId, id, body.text);
+    if (!n) return reply.code(404).send({ error: "note not found" });
+    return { note: serializeNote(n) };
+  });
+
+  app.delete("/notes/:id", { preHandler: auth }, async (req, reply) => {
+    const user = (req as AuthedRequest).user;
+    const id = Number((req.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "invalid note id" });
+    if (!deleteNote(db, user.userId, id)) return reply.code(404).send({ error: "note not found" });
+    return { ok: true };
+  });
+
+  // ---------- public trader profile (read-only copy-trade view) ----------
+
+  app.get("/traders/:address", async (req, reply) => {
+    const { address } = req.params as { address: string };
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return reply.code(400).send({ error: "invalid address" });
+    const u = db.prepare("SELECT id, address, created_at FROM users WHERE address = ?").get(address.toLowerCase()) as { id: number; address: string; created_at: number } | undefined;
+    if (!u) return reply.code(404).send({ error: "trader not found" });
+    const seasonId = getSeasonId(db);
+    const p = await getPortfolio(db, u.id, seasonId);
+    const imgStmt = db.prepare(
+      "SELECT image_url FROM pools WHERE token_address = ? COLLATE NOCASE AND image_url IS NOT NULL ORDER BY liquidity_usd DESC LIMIT 1"
+    );
+    const closed = db.prepare(
+      `SELECT t.id, t.token_address AS token,
+              COALESCE(tok.symbol, po.symbol, '?') AS symbol,
+              t.amount_in AS amountIn, t.amount_out AS amountOut,
+              t.exec_price AS exitPriceUsd, t.realized_pnl AS realizedPnlUsd, t.ts
+       FROM trades t
+       LEFT JOIN tokens tok ON tok.address = t.token_address
+       LEFT JOIN pools po ON po.pair_address = t.pair_address
+       WHERE t.user_id = ? AND t.side = 'sell'
+       ORDER BY t.id DESC LIMIT 20`
+    ).all(u.id) as {
+      id: number; token: string; symbol: string; amountIn: string; amountOut: string;
+      exitPriceUsd: number; realizedPnlUsd: number | null; ts: number;
+    }[];
+    const decStmt = db.prepare("SELECT decimals FROM tokens WHERE address = ?");
+    const closedTrades = closed.map((r) => {
+      const dec = (decStmt.get(r.token) as { decimals: number } | undefined)?.decimals ?? 18;
+      const qtyDec = Number(r.amountIn) / 10 ** dec;
+      const proceeds = Number(r.amountOut);
+      const pnl = r.realizedPnlUsd ?? 0;
+      const cost = proceeds - pnl;
+      return {
+        id: r.id, token: r.token, symbol: r.symbol, qtyDec,
+        entryPriceUsd: qtyDec > 0 ? cost / qtyDec : null,
+        exitPriceUsd: r.exitPriceUsd,
+        proceedsUsd: proceeds,
+        realizedPnlUsd: r.realizedPnlUsd,
+        pnlPct: cost > 0 ? (pnl / cost) * 100 : null,
+        ts: r.ts,
+      };
+    });
+    return {
+      address: u.address,
+      display: u.address.slice(0, 6) + "..." + u.address.slice(-4),
+      joinedAt: u.created_at,
+      badges: getUserBadges(db, u.id),
+      badgeDefs: BADGE_DEFS,
+      equityUsd: p.equityUsd,
+      realizedPnlUsd: p.realizedPnlUsd,
+      unrealizedPnlUsd: p.positions.reduce((s, x) => s + x.unrealizedPnlUsd, 0),
+      equityCurve: getEquityCurve(db, u.id, seasonId),
+      positions: p.positions.map((x) => ({
+        token: x.token, symbol: x.symbol, pair: x.pair,
+        imageUrl: (imgStmt.get(x.token) as { image_url: string | null } | undefined)?.image_url ?? null,
+        qtyDec: x.qtyDec,
+        entryPriceUsd: x.qtyDec > 0 ? x.costBasisUsd / x.qtyDec : null,
+        sizeUsd: x.markUsd,
+        costBasisUsd: x.costBasisUsd,
+        unrealizedPnlUsd: x.unrealizedPnlUsd,
+      })),
+      closedTrades,
+    };
+  });
 
   // ---------- leaderboard ----------
 

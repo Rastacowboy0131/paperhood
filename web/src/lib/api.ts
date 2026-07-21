@@ -139,6 +139,7 @@ export interface LeaderboardEntry {
   pnlPct: number;
   trades: number;
   badges?: string[];
+  referralFlair?: "silver" | "gold" | null;
 }
 
 export interface BadgeDef {
@@ -208,6 +209,50 @@ export interface Recap {
 
 export interface Me {
   user: { userId: number; address: string; createdAt?: string } | null;
+}
+
+// Watchlist entries (server-side, per wallet).
+export interface WatchEntry {
+  token: string;
+  createdAt: number;
+}
+
+// Trade journal note.
+export interface Note {
+  id: number;
+  token: string;
+  symbol: string;
+  tradeId: number | null;
+  text: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// Public trader profile (/traders/:address).
+export interface TraderPosition {
+  token: string;
+  symbol: string;
+  pair: string;
+  imageUrl?: string | null;
+  qtyDec: number;
+  entryPriceUsd: number | null;
+  sizeUsd: number;
+  costBasisUsd: number;
+  unrealizedPnlUsd: number;
+}
+
+export interface TraderProfile {
+  address: string;
+  display: string;
+  joinedAt: number;
+  badges: UserBadge[];
+  badgeDefs: BadgeDef[];
+  equityUsd: number;
+  realizedPnlUsd: number;
+  unrealizedPnlUsd: number;
+  equityCurve: EquityPoint[];
+  positions: TraderPosition[];
+  closedTrades: ClosedTrade[];
 }
 
 // POST /tokens/import response.
@@ -293,8 +338,19 @@ export const api = {
     req<{ trades: PaperTrade[] }>(`/tokens/${addr}/paper-trades`),
   quote: (body: { tokenIn: string; tokenOut: string; amountIn: string }) =>
     req<QuoteResponse>("/quote", { method: "POST", body: JSON.stringify(body) }),
-  trade: (body: { token: string; side: "buy" | "sell"; amount: string | number }) =>
+  trade: (body: { token: string; side: "buy" | "sell"; amount: string | number; note?: string }) =>
     req<TradeResult>("/trade", { method: "POST", body: JSON.stringify(body) }),
+  watchlist: () => req<{ watchlist: WatchEntry[] }>("/watchlist"),
+  addWatch: (token: string) => req<{ ok: boolean }>(`/watchlist/${token}`, { method: "PUT" }),
+  removeWatch: (token: string) => req<{ ok: boolean }>(`/watchlist/${token}`, { method: "DELETE" }),
+  notes: (token?: string) =>
+    req<{ notes: Note[]; maxChars: number }>(`/notes${token ? `?token=${token}` : ""}`),
+  createNote: (body: { token: string; text: string; tradeId?: number }) =>
+    req<{ note: Note }>("/notes", { method: "POST", body: JSON.stringify(body) }),
+  updateNote: (id: number, text: string) =>
+    req<{ note: Note }>(`/notes/${id}`, { method: "PATCH", body: JSON.stringify({ text }) }),
+  deleteNote: (id: number) => req<{ ok: boolean }>(`/notes/${id}`, { method: "DELETE" }),
+  trader: (address: string) => req<TraderProfile>(`/traders/${address}`),
   portfolio: () => req<Portfolio>("/portfolio"),
   orders: (token?: string) =>
     req<{ orders: Order[] }>(`/orders${token ? `?token=${token}` : ""}`),

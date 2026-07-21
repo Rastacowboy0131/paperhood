@@ -168,6 +168,30 @@ CREATE TABLE IF NOT EXISTS badges (
 );
 CREATE INDEX IF NOT EXISTS idx_badges_user ON badges(user_id);
 `);
+
+  // Watchlist: starred tokens per user (server-side, wallet-authed).
+  // Trade journal: short freeform notes, optionally tied to a specific trade.
+  db.exec(`
+CREATE TABLE IF NOT EXISTS watchlist (
+  user_id INTEGER NOT NULL,
+  token_address TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, token_address)
+);
+CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
+
+CREATE TABLE IF NOT EXISTS trade_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  token_address TEXT NOT NULL,
+  trade_id INTEGER,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_notes_user ON trade_notes(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notes_user_token ON trade_notes(user_id, token_address);
+`);
 }
 
 function migrateWeeklySeasonsToMonthly(db: DatabaseSync): void {
