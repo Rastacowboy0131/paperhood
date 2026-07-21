@@ -380,7 +380,7 @@ export default function TradePage() {
     <div>
       {/* Token banner from dexscreener header image; hidden when absent or broken */}
       {detail.headerUrl && !bannerBroken && (
-        <div className="mb-3 h-[72px] w-full overflow-hidden rounded-lg border border-term-line sm:h-[110px] lg:h-[140px]">
+        <div className="mb-3 h-[110px] w-full overflow-hidden rounded-lg border border-term-line sm:h-[170px] lg:h-[220px]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={detail.headerUrl}
