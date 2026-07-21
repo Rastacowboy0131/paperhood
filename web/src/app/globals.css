@@ -194,6 +194,11 @@ html.dark .row-gold { background-color: rgb(234 179 8 / 0.1); }
 html.dark .row-silver { background-color: rgb(148 163 184 / 0.08); }
 html.dark .row-bronze { background-color: rgb(194 120 51 / 0.1); }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .podium-shine::after,
   .podium-confetti span,
