@@ -6,6 +6,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { useAccount, useChainId, useConnect, useDisconnect, useSignMessage } from "wagmi";
 import { createSiweMessage } from "viem/siwe";
 import { api, DEV_AUTH } from "./api";
+import { claimStoredReferral } from "./referrals";
 
 interface AuthState {
   address: string | null;
@@ -94,6 +95,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const signature = await signMessageAsync({ message });
       const res = await api.verify(message, signature);
       setAddress(res.user.address);
+      // If the user arrived via a referral link, attribute them now.
+      claimStoredReferral();
     } catch (e: any) {
       setError(e?.shortMessage || e?.message || "sign-in failed");
     } finally {
@@ -108,6 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await api.devLogin();
       const me = await api.me();
       setAddress(me.user?.address ?? null);
+      claimStoredReferral();
     } catch (e: any) {
       setError(e?.message || "dev login failed");
     } finally {

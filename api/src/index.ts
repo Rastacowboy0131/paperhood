@@ -14,6 +14,8 @@ import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../en
 import { getWatchlist, addWatch, removeWatch, createNote, updateNote, deleteNote, listNotes, NOTE_MAX_CHARS } from "../../engine/src/social.js";
 import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
+import { registerReferralRoutes } from "./referrals.js";
+import { referralFlairForUsers } from "../../engine/src/referrals.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, RateLimitedError, EXPLORER_URL } from "./tokeninfo.js";
 import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
@@ -63,6 +65,7 @@ export async function buildServer(opts: BuildOpts = {}) {
 
   const auth = requireAuth(jwtSecret);
   registerAuthRoutes(app, db, jwtSecret);
+  registerReferralRoutes(app, db, auth);
 
   // Per-user (fall back to per-IP) key for rate limiting.
   const rlKey = (req: FastifyRequest) => {
@@ -666,10 +669,11 @@ export async function buildServer(opts: BuildOpts = {}) {
       if (!info) return reply.code(404).send({ error: "unknown season" });
       const entries = seasonLeaderboard(db, info.id, metric);
       const badgeMap = badgesForUsers(db, entries.map((e) => e.userId));
+      const flairMap = referralFlairForUsers(db, entries.map((e) => e.userId));
       return {
         season: info,
         metric,
-        entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [] })),
+        entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [], referralFlair: flairMap.get(e.userId) ?? null })),
       };
     }
     // New windowed API: ?window=1d|7d|all (rolling windows, all seasons).
@@ -679,10 +683,11 @@ export async function buildServer(opts: BuildOpts = {}) {
       }
       const entries = windowLeaderboard(db, q.window as LeaderboardWindow, undefined, metric);
       const badgeMap = badgesForUsers(db, entries.map((e) => e.userId));
+      const flairMap = referralFlairForUsers(db, entries.map((e) => e.userId));
       return {
         window: q.window,
         metric,
-        entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [] })),
+        entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [], referralFlair: flairMap.get(e.userId) ?? null })),
       };
     }
     // Backward compat: ?period=daily|weekly (season-scoped, UTC day / season start).

@@ -12,6 +12,7 @@ const links = [
   { href: "/", label: "Screener" },
   { href: "/portfolio", label: "Portfolio" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/referrals", label: "Referrals" },
 ];
 
 export function Nav() {
