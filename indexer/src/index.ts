@@ -29,6 +29,9 @@ async function discoveryLoop() {
   while (running) {
     try {
       await runDiscovery();
+      // Newly discovered pools get chart history right away instead of
+      // waiting for the next restart. Skips pools that already have enough.
+      void runBackfill().catch((e) => console.warn("post-discovery backfill failed:", (e as Error).message));
     } catch (e) {
       console.warn("discovery failed:", (e as Error).message);
     }

@@ -16,6 +16,7 @@ import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, RateLimitedError, EXPLORER_URL } from "./tokeninfo.js";
 import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
+import { backfillPairHistory } from "../../engine/src/backfill.js";
 import { WsHub } from "./ws.js";
 
 export interface BuildOpts {
@@ -131,6 +132,15 @@ export async function buildServer(opts: BuildOpts = {}) {
     if (!body?.address) return reply.code(400).send({ error: "address required" });
     try {
       const r = await importToken(db, body.address);
+      // Backfill chart history asynchronously so the import response is not
+      // blocked on GeckoTerminal (2-3 rate-limited requests, several seconds).
+      if (!r.alreadyTracked) {
+        void backfillPairHistory(db, r.pair, r.address)
+          .then(({ minutes, hours }) =>
+            app.log.info(`import backfill ${r.symbol}: +${minutes} 1m, +${hours} 1h candles`)
+          )
+          .catch((e) => app.log.warn(`import backfill failed for ${r.symbol}: ${(e as Error).message}`));
+      }
       return r;
     } catch (e) {
       if (e instanceof ImportError) return reply.code(e.status).send({ error: e.message });

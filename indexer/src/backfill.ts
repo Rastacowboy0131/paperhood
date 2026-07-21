@@ -103,9 +103,22 @@ function storeHourly(pair: string, rows: OhlcvRow[]): number {
   return n;
 }
 
-// One-shot backfill at startup. Pools are processed deepest-liquidity first.
-// Pools that already have enough history are skipped.
+// Backfill pass over all active pools, deepest-liquidity first. Pools that
+// already have enough history are skipped, so it is cheap to re-run after
+// each discovery cycle to give newly found pools chart history. A guard
+// prevents overlapping runs (each run is slow by design, rate limited).
+let backfillRunning = false;
 export async function runBackfill(): Promise<void> {
+  if (backfillRunning) return;
+  backfillRunning = true;
+  try {
+    await runBackfillInner();
+  } finally {
+    backfillRunning = false;
+  }
+}
+
+async function runBackfillInner(): Promise<void> {
   const pools = getPools.all() as Pool[];
   const now = Math.floor(Date.now() / 1000);
   let done = 0;
