@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { getSeasonId, realizedPnl, truncateAddress, STARTING_BALANCE_USD } from "./ledger.js";
+import { getSeasonId, listSeasons, realizedPnl, truncateAddress, STARTING_BALANCE_USD, SeasonInfo } from "./ledger.js";
 
 export interface LeaderboardEntry {
   userId: number;
@@ -94,4 +94,23 @@ export function windowLeaderboard(
   }
   entries.sort((a, b) => b.realizedPnlUsd - a.realizedPnlUsd);
   return entries;
+}
+
+// ---------- season leaderboard and archive ----------
+
+// Full-season ranking by realized PnL % (fresh 10k per season).
+export function seasonLeaderboard(db: DatabaseSync, seasonId: number): LeaderboardEntry[] {
+  return rank(db, seasonId, 0);
+}
+
+export interface SeasonArchiveEntry {
+  season: SeasonInfo;
+  winners: LeaderboardEntry[]; // top 3
+}
+
+// Top 3 of every finished season, newest first.
+export function seasonArchive(db: DatabaseSync, nowSec: number = Math.floor(Date.now() / 1000)): SeasonArchiveEntry[] {
+  const past = listSeasons(db).filter((s) => s.endTs <= nowSec);
+  past.sort((a, b) => b.startTs - a.startTs);
+  return past.map((season) => ({ season, winners: seasonLeaderboard(db, season.id).slice(0, 3) }));
 }
