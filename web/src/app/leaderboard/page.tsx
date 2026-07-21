@@ -72,12 +72,12 @@ export default function LeaderboardPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         <h1 className="text-base font-bold">Leaderboard</h1>
         <span className="text-[11px] uppercase tracking-wider text-term-dim">
           {TABS.find((t) => t.key === period)?.desc}
         </span>
-        <div className="tab-track ml-auto">
+        <div className="tab-track sm:ml-auto">
           {(
             [
               { key: "equity", label: "Equity" },
@@ -106,17 +106,17 @@ export default function LeaderboardPage() {
         </div>
       </div>
       {period === "season" && season && (
-        <div className="panel mb-3 flex items-center gap-2 px-3 py-2 text-xs">
+        <div className="panel mb-3 flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
           <span className="font-semibold">Season {season.num}</span>
           <span className="text-term-dim">{seasonRange(season)}</span>
-          <span className="ml-auto text-term-dim">fresh $10k each season</span>
+          <span className="text-term-dim sm:ml-auto">fresh $10k each season</span>
         </div>
       )}
       {period !== "season" && <PrizePoolBanner window={period as "1d" | "7d" | "all"} />}
       {err && <div className="mb-3 text-sm text-term-red">{err}</div>}
       <div className="panel overflow-x-auto">
-        <table className="w-full text-[13px]">
-          <thead className="sticky top-12 z-10 bg-term-panel">
+        <table className="w-full min-w-[420px] text-[13px]">
+          <thead className="bg-term-panel">
             <tr>
               <th className="th text-left">Rank</th>
               <th className="th text-left">Trader</th>

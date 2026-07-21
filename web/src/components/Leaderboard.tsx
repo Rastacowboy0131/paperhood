@@ -158,7 +158,7 @@ export default function Leaderboard() {
     <div className="mb-6">
       <PrizePoolBanner window={win} />
 
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="text-sm font-bold">Leaderboard</h2>
         <span className="text-[11px] uppercase tracking-wider text-term-dim">{metric} PnL</span>
         <div className="ml-auto flex gap-1">

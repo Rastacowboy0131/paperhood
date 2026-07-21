@@ -155,7 +155,7 @@ export default function Screener() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search symbol, name, or address"
-          className="input w-72"
+          className="input w-full sm:w-72"
         />
         <button
           onClick={() => setDenom(denom === "usd" ? "eth" : "usd")}
@@ -204,8 +204,8 @@ export default function Screener() {
         </div>
       )}
       <div className="panel overflow-x-auto">
-        <table className="w-full text-[13px]">
-          <thead className="sticky top-12 z-10 bg-term-panel">
+        <table className="w-full min-w-[760px] text-[13px]">
+          <thead className="bg-term-panel">
             <tr>
               <th className="th w-8"></th>
               {th("symbol", "Token", false)}
@@ -233,7 +233,7 @@ export default function Screener() {
                     {signedIn ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleStar(t.address.toLowerCase()); }}
-                        className={starred ? "text-term-amber" : "text-term-faint hover:text-term-dim"}
+                        className={`flex h-10 w-8 items-center justify-center text-base ${starred ? "text-term-amber" : "text-term-faint hover:text-term-dim"}`}
                         title={starred ? "Remove from watchlist" : "Add to watchlist"}
                       >
                         {starred ? "\u2605" : "\u2606"}

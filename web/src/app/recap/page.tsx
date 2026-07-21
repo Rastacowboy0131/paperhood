@@ -32,7 +32,7 @@ export default function RecapPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 py-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-lg font-bold">Recap generator</h1>
         <div className="flex gap-1">
           {WINDOWS.map((w) => (

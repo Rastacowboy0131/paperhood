@@ -46,7 +46,7 @@ export default function ReferralsPage() {
             return (
               <li
                 key={t.tier}
-                className={`flex items-center justify-between gap-3 rounded border px-3 py-2 text-sm ${
+                className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded border px-3 py-2 text-sm ${
                   reached ? "border-term-accent/50 bg-term-raised" : "border-term-border"
                 }`}
               >

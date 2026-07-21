@@ -634,7 +634,7 @@ export default function TradePage() {
 
       <div className="grid gap-3 lg:grid-cols-[1fr_340px]">
       <div className="min-w-0">
-        <div className="mb-2 flex items-center gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="tab-track">
           {TFS.map((x) => (
             <button

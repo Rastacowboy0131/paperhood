@@ -48,6 +48,25 @@ html.dark {
 
 body {
   @apply bg-term-bg font-sans text-sm text-term-text antialiased;
+  overflow-x: hidden;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+/* Mobile: 16px inputs prevent iOS Safari auto-zoom on focus; respect notch
+   safe areas. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
 }
 
 .num {

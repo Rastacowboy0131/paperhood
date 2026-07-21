@@ -101,7 +101,7 @@ export default function TraderPage() {
       <section>
         <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Open positions</h2>
         <div className="panel overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full min-w-[640px] text-[13px]">
             <thead className="bg-term-panel">
               <tr>
                 <th className="th text-left">Token</th>
@@ -144,7 +144,7 @@ export default function TraderPage() {
       <section>
         <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Recent closed trades</h2>
         <div className="panel overflow-x-auto">
-          <table className="w-full text-[13px]">
+          <table className="w-full min-w-[640px] text-[13px]">
             <thead className="bg-term-panel">
               <tr>
                 <th className="th text-left">Date</th>

@@ -21,18 +21,18 @@ export function Nav() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-term-border bg-term-panel/95 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 px-3 sm:px-4 md:h-14 md:flex-nowrap md:gap-6">
         <Link href="/" className="flex items-baseline gap-1 text-[17px] font-bold tracking-tight">
           <span className="text-term-accent">Paper</span>
           <span>Hood</span>
           <span className="text-xs">🏹</span>
         </Link>
-        <nav className="flex h-full items-stretch gap-1 text-[13px]">
+        <nav className="order-last -mx-3 flex h-10 w-[calc(100%+1.5rem)] items-stretch gap-1 overflow-x-auto px-3 text-[13px] sm:-mx-4 sm:w-[calc(100%+2rem)] sm:px-4 md:order-none md:mx-0 md:h-14 md:w-auto md:overflow-visible md:px-0">
           {links.map((l) => (
             <Link
               key={l.href}
               href={l.href}
-              className={`flex items-center border-b-2 px-2.5 transition-colors ${
+              className={`flex items-center whitespace-nowrap border-b-2 px-2.5 transition-colors ${
                 path === l.href
                   ? "border-term-accent font-semibold text-term-text"
                   : "border-transparent text-term-dim hover:text-term-text"
@@ -42,12 +42,12 @@ export function Nav() {
             </Link>
           ))}
         </nav>
-        <div className="ml-auto flex items-center gap-2 text-sm">
+        <div className="ml-auto flex h-14 items-center gap-1.5 text-sm sm:gap-2">
           <TourHelpButton />
           <SoundToggle />
           <ThemeToggle />
           {error && (
-            <span className="max-w-96 break-words text-xs leading-tight text-term-red" title={error}>
+            <span className="max-w-[40vw] break-words text-xs leading-tight text-term-red md:max-w-96" title={error}>
               {error}
             </span>
           )}

@@ -105,7 +105,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
           aria-label="Onboarding tour"
           onClick={(e) => { if (e.target === e.currentTarget) close(); }}
         >
-          <div className="panel w-full max-w-md p-5 shadow-xl">
+          <div className="panel max-h-[85vh] w-full max-w-md overflow-y-auto p-5 shadow-xl">
             <div className="text-3xl">{s.emoji}</div>
             <h2 className="mt-2 text-lg font-bold">{s.title}</h2>
             <p className="mt-2 text-sm leading-relaxed text-term-dim">{s.body}</p>
@@ -115,6 +115,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
                   <button
                     key={i}
                     onClick={() => setStep(i)}
+                    aria-label={`Go to step ${i + 1}`}
                     className={`h-1.5 rounded-full transition-all ${
                       i === step ? "w-5 bg-term-accent" : "w-1.5 bg-term-border hover:bg-term-dim"
                     }`}
