@@ -60,22 +60,44 @@ export function setEthUsdForTest(db: DatabaseSync, rate: number): void {
 }
 
 // ---------- seasons ----------
-// Weekly season: fresh 10k every Monday 00:00 UTC.
+// Monthly season: fresh 10k on the 1st of each month, 00:00 UTC.
+// Season 1 is special: it covers everything from launch up to the first
+// monthly boundary (existing weekly rows were consolidated by a db migration,
+// no balances were reset).
 
 export function seasonStart(tsSec: number): number {
   const d = new Date(tsSec * 1000);
-  const day = d.getUTCDay(); // 0 Sun .. 6 Sat
-  const daysSinceMonday = (day + 6) % 7;
-  const monday = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - daysSinceMonday);
-  return Math.floor(monday / 1000);
+  return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000);
+}
+
+// First day of the next month, 00:00 UTC.
+export function seasonEnd(tsSec: number): number {
+  const d = new Date(tsSec * 1000);
+  return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000);
 }
 
 export function getSeasonId(db: DatabaseSync, tsSec: number = Math.floor(Date.now() / 1000)): number {
+  // Range lookup first: season 1 may span more than one calendar month.
+  const hit = db.prepare("SELECT id FROM seasons WHERE start_ts <= ? AND end_ts > ? ORDER BY start_ts DESC LIMIT 1").get(tsSec, tsSec) as { id: number } | undefined;
+  if (hit) return hit.id;
   const start = seasonStart(tsSec);
-  const row = db.prepare("SELECT id FROM seasons WHERE start_ts = ?").get(start) as { id: number } | undefined;
-  if (row) return row.id;
-  db.prepare("INSERT INTO seasons (start_ts, end_ts) VALUES (?, ?)").run(start, start + 7 * 86400);
+  db.prepare("INSERT INTO seasons (start_ts, end_ts) VALUES (?, ?)").run(start, seasonEnd(tsSec));
   return (db.prepare("SELECT id FROM seasons WHERE start_ts = ?").get(start) as { id: number }).id;
+}
+
+export interface SeasonInfo { id: number; num: number; startTs: number; endTs: number }
+
+// Season number: 1-based position by start_ts.
+export function seasonInfo(db: DatabaseSync, seasonId: number): SeasonInfo | null {
+  const row = db.prepare("SELECT id, start_ts, end_ts FROM seasons WHERE id = ?").get(seasonId) as { id: number; start_ts: number; end_ts: number } | undefined;
+  if (!row) return null;
+  const num = (db.prepare("SELECT COUNT(*) AS c FROM seasons WHERE start_ts <= ?").get(row.start_ts) as { c: number }).c;
+  return { id: row.id, num, startTs: row.start_ts, endTs: row.end_ts };
+}
+
+export function listSeasons(db: DatabaseSync): SeasonInfo[] {
+  const rows = db.prepare("SELECT id, start_ts, end_ts FROM seasons ORDER BY start_ts").all() as { id: number; start_ts: number; end_ts: number }[];
+  return rows.map((r, i) => ({ id: r.id, num: i + 1, startTs: r.start_ts, endTs: r.end_ts }));
 }
 
 // ---------- users ----------

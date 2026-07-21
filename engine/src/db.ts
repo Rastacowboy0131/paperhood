@@ -108,6 +108,52 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id, created_at);
 `);
+
+  // Migration: seasons used to be weekly (Monday to Monday). Seasons are now
+  // monthly. Consolidate all existing weekly rows into a single season 1 that
+  // spans from the earliest recorded start to the next monthly boundary after
+  // now, and repoint all trades at it. No balances are reset by this: cash and
+  // positions are derived from trades within a season, and merging seasons
+  // only widens the window.
+  migrateWeeklySeasonsToMonthly(db);
+
+  // Account equity history: sampled snapshots of each user's total equity
+  // (cash + marked positions), used for the profile equity curve.
+  db.exec(`
+CREATE TABLE IF NOT EXISTS equity_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  season_id INTEGER NOT NULL,
+  equity_usd REAL NOT NULL,
+  ts INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_equity_user_ts ON equity_snapshots(user_id, ts);
+
+CREATE TABLE IF NOT EXISTS badges (
+  user_id INTEGER NOT NULL,
+  badge TEXT NOT NULL,
+  earned_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, badge)
+);
+CREATE INDEX IF NOT EXISTS idx_badges_user ON badges(user_id);
+`);
+}
+
+function migrateWeeklySeasonsToMonthly(db: DatabaseSync): void {
+  const rows = db.prepare("SELECT id, start_ts, end_ts FROM seasons ORDER BY start_ts").all() as { id: number; start_ts: number; end_ts: number }[];
+  const weekly = rows.filter((r) => r.end_ts - r.start_ts === 7 * 86400);
+  if (weekly.length === 0) return;
+  const now = Math.floor(Date.now() / 1000);
+  const d = new Date(now * 1000);
+  const nextMonth = Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1) / 1000);
+  const keep = rows[0];
+  const others = rows.filter((r) => r.id !== keep.id).map((r) => r.id);
+  db.prepare("UPDATE seasons SET end_ts = ? WHERE id = ?").run(nextMonth, keep.id);
+  if (others.length > 0) {
+    const list = others.join(",");
+    db.exec(`UPDATE trades SET season_id = ${keep.id} WHERE season_id IN (${list});
+DELETE FROM seasons WHERE id IN (${list});`);
+  }
 }
 
 // Replay trades per user/season/token in order, pricing each sell against
