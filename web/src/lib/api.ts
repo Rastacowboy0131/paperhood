@@ -191,6 +191,21 @@ export interface PrizePool {
   weekEndsAt: number; // unix seconds, next Monday 00:00 UTC
 }
 
+export interface Recap {
+  window: "daily" | "weekly" | "season";
+  windowStart: number;
+  generatedAt: number;
+  totalTrades: number;
+  activeTraders: number;
+  topGainer: { display: string; pnlUsd: number; pnlPct: number } | null;
+  biggestLoss: { display: string; pnlUsd: number; pnlPct: number } | null;
+  mostTraded: { symbol: string; trades: number } | null;
+  prizePoolUsd: number;
+  seasonNum: number | null;
+  short: string;
+  long: string;
+}
+
 export interface Me {
   user: { userId: number; address: string; createdAt?: string } | null;
 }
@@ -303,6 +318,7 @@ export const api = {
   myBadges: () => req<{ defs: BadgeDef[]; badges: UserBadge[] }>("/badges/me"),
   prizePool: () =>
     req<PrizePool>("/prizepool"),
+  recap: (window: "daily" | "weekly" | "season") => req<Recap>(`/recap?window=${window}`),
   nonce: () => req<{ nonce: string; expiresInS: number }>("/auth/nonce"),
   verify: (message: string, signature: string) =>
     req<{ ok: boolean; user: { userId: number; address: string } }>("/auth/verify", {

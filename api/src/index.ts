@@ -18,6 +18,7 @@ import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, RateLim
 import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
 import { backfillPairHistory } from "../../engine/src/backfill.js";
 import { ponsGraduation } from "../../engine/src/pons.js";
+import { buildRecap, RecapWindow } from "../../engine/src/recap.js";
 import { WsHub } from "./ws.js";
 
 export interface BuildOpts {
@@ -576,6 +577,22 @@ export async function buildServer(opts: BuildOpts = {}) {
       weekEndsAt,
     };
     prizeCache = { at: now, body };
+    return body;
+  });
+
+  // ---------- recap ----------
+  // Shareable text recap for a window. Cached briefly; public endpoint.
+  const recapCache = new Map<string, { at: number; body: unknown }>();
+  app.get("/recap", async (req, reply) => {
+    const q = req.query as { window?: string };
+    const w = q.window || "daily";
+    if (w !== "daily" && w !== "weekly" && w !== "season") {
+      return reply.code(400).send({ error: "window must be daily, weekly, or season" });
+    }
+    const hit = recapCache.get(w);
+    if (hit && Date.now() - hit.at < 30000) return hit.body;
+    const body = buildRecap(db, w as RecapWindow);
+    recapCache.set(w, { at: Date.now(), body });
     return body;
   });
 
