@@ -6,17 +6,17 @@ const config: Config = {
     extend: {
       colors: {
         term: {
-          bg: "#0b0e11",
-          panel: "#11161c",
-          raised: "#161d24",
-          hover: "#151b22",
-          border: "#1e2730",
-          text: "#cdd6df",
-          dim: "#5f6f7f",
-          accent: "#2fbf9a",
-          green: "#1fc47a",
-          red: "#ee5566",
-          amber: "#f0b429",
+          bg: "#fafafa",
+          panel: "#ffffff",
+          raised: "#f3f4f6",
+          hover: "#f9fafb",
+          border: "#e5e7eb",
+          text: "#1f2937",
+          dim: "#6b7280",
+          accent: "#00c805",
+          green: "#00a305",
+          red: "#ff5000",
+          amber: "#d97706",
         },
       },
       fontFamily: {
@@ -25,11 +25,11 @@ const config: Config = {
       },
       keyframes: {
         flashUp: {
-          "0%": { backgroundColor: "rgba(31, 196, 122, 0.14)" },
+          "0%": { backgroundColor: "rgba(0, 200, 5, 0.12)" },
           "100%": { backgroundColor: "transparent" },
         },
         flashDown: {
-          "0%": { backgroundColor: "rgba(238, 85, 102, 0.14)" },
+          "0%": { backgroundColor: "rgba(255, 80, 0, 0.10)" },
           "100%": { backgroundColor: "transparent" },
         },
       },

@@ -36,17 +36,17 @@ export function CandleChart({
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#0a0e12" },
-        textColor: "#5f7387",
+        background: { type: ColorType.Solid, color: "#ffffff" },
+        textColor: "#6b7280",
       },
       grid: {
-        vertLines: { color: "#141c24" },
-        horzLines: { color: "#141c24" },
+        vertLines: { color: "#f3f4f6" },
+        horzLines: { color: "#f3f4f6" },
       },
       width: containerRef.current.clientWidth,
       height: 420,
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#1e2a36" },
-      rightPriceScale: { borderColor: "#1e2a36" },
+      timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#e5e7eb" },
+      rightPriceScale: { borderColor: "#e5e7eb" },
     });
     const series = chart.addCandlestickSeries({
       upColor: "#22c55e",

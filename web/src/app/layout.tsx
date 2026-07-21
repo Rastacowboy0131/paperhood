@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   description: "Paper trading terminal for Robinhood Chain",
 };
 
+export const viewport = {
+  themeColor: "#ffffff",
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>

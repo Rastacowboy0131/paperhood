@@ -37,7 +37,7 @@ export default function LeaderboardPage() {
       <div className="mb-4 flex items-center gap-2">
         <h1 className="text-base font-bold">Leaderboard</h1>
         <span className="text-[11px] uppercase tracking-wider text-term-dim">realized PnL only</span>
-        <div className="ml-auto flex gap-1">
+        <div className="tab-track ml-auto">
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -68,24 +68,24 @@ export default function LeaderboardPage() {
               return (
                 <tr
                   key={e.userId}
-                  className={`border-t border-term-border/60 transition-colors hover:bg-term-hover ${isMe ? "bg-term-accent/10" : ""}`}
+                  className={`border-t border-gray-100 transition-colors hover:bg-gray-50 ${isMe ? "bg-term-accent/10" : ""}`}
                 >
-                  <td className="num px-3 py-1.5">
+                  <td className="num px-3 py-2.5">
                     {i + 1}
                     {i === 0 ? " 🥇" : i === 1 ? " 🥈" : i === 2 ? " 🥉" : ""}
                   </td>
-                  <td className="num px-3 py-1.5">
+                  <td className="num px-3 py-2.5">
                     {e.display}
-                    {isMe && <span className="ml-2 rounded bg-term-accent px-1.5 text-xs text-black">you</span>}
+                    {isMe && <span className="ml-2 rounded-full bg-term-accent px-2 text-xs font-medium text-white">you</span>}
                   </td>
-                  <td className={`num px-3 py-1.5 text-right ${e.realizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
+                  <td className={`num px-3 py-2.5 text-right ${e.realizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
                     {e.realizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(e.realizedPnlUsd, 2)}
                   </td>
-                  <td className={`num px-3 py-1.5 text-right ${e.pnlPct >= 0 ? "text-term-green" : "text-term-red"}`}>
+                  <td className={`num px-3 py-2.5 text-right ${e.pnlPct >= 0 ? "text-term-green" : "text-term-red"}`}>
                     {e.pnlPct >= 0 ? "+" : ""}
                     {e.pnlPct.toFixed(2)}%
                   </td>
-                  <td className="num px-3 py-1.5 text-right">{e.trades}</td>
+                  <td className="num px-3 py-2.5 text-right">{e.trades}</td>
                 </tr>
               );
             })}

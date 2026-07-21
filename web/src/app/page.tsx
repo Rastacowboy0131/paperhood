@@ -148,17 +148,17 @@ export default function Screener() {
                 <tr
                   key={t.address}
                   onClick={() => router.push(`/t/${t.address}`)}
-                  className={`cursor-pointer border-t border-term-border/60 transition-colors hover:bg-term-hover ${
+                  className={`cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50 ${
                     flash === "up" ? "animate-flash-up" : flash === "down" ? "animate-flash-down" : ""
                   }`}
                 >
-                  <td className="px-3 py-1.5">
+                  <td className="px-3 py-2.5">
                     <div className="max-w-[240px] truncate whitespace-nowrap">
                       <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
                       <span className="text-term-dim">{(t.name || "").slice(0, 40)}</span>
                     </div>
                   </td>
-                  <td className="num px-3 py-1.5 text-right">
+                  <td className="num px-3 py-2.5 text-right">
                     {denom === "usd"
                       ? fmtMcap(t.mcapUsd)
                       : t.mcapUsd != null && ethUsd > 0
@@ -166,13 +166,13 @@ export default function Screener() {
                         : "-"}
                   </td>
                   <td
-                    className={`num px-3 py-1.5 text-right ${(t.change24hPct ?? 0) >= 0 ? "text-term-green" : "text-term-red"}`}
+                    className={`num px-3 py-2.5 text-right ${(t.change24hPct ?? 0) >= 0 ? "text-term-green" : "text-term-red"}`}
                   >
                     {t.change24hPct != null ? `${t.change24hPct >= 0 ? "+" : ""}${t.change24hPct.toFixed(2)}%` : "-"}
                   </td>
-                  <td className="num px-3 py-1.5 text-right">${fmtCompact(t.liquidityUsd)}</td>
-                  <td className="num px-3 py-1.5 text-right">${fmtCompact(t.volume24hUsd)}</td>
-                  <td className="px-3 py-1.5 text-right text-xs text-term-dim">
+                  <td className="num px-3 py-2.5 text-right">${fmtCompact(t.liquidityUsd)}</td>
+                  <td className="num px-3 py-2.5 text-right">${fmtCompact(t.volume24hUsd)}</td>
+                  <td className="px-3 py-2.5 text-right text-xs text-term-dim">
                     {t.dex} {t.version}
                   </td>
                 </tr>
@@ -181,7 +181,7 @@ export default function Screener() {
             {loading &&
               !rows.length &&
               Array.from({ length: 8 }).map((_, i) => (
-                <tr key={`sk-${i}`} className="border-t border-term-border/60">
+                <tr key={`sk-${i}`} className="border-t border-gray-100">
                   {Array.from({ length: 6 }).map((_, j) => (
                     <td key={j} className="px-3 py-2">
                       <div className={`skeleton h-3.5 ${j === 0 ? "w-32" : "ml-auto w-16"}`} />

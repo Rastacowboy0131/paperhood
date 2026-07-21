@@ -2,8 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+}
+
 body {
-  @apply bg-term-bg font-sans text-[13px] text-term-text antialiased;
+  @apply bg-term-bg font-sans text-sm text-term-text antialiased;
 }
 
 .num {
@@ -13,44 +17,49 @@ body {
 @layer components {
   /* Panel: the one surface style used everywhere. */
   .panel {
-    @apply rounded-md border border-term-border bg-term-panel;
+    @apply rounded-xl border border-term-border bg-term-panel shadow-sm;
   }
   .panel-header {
-    @apply flex items-center gap-2 border-b border-term-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim;
+    @apply flex items-center gap-2 border-b border-gray-100 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-term-dim;
   }
 
   /* Table micro-header cells. */
   .th {
-    @apply whitespace-nowrap px-3 py-2 text-[11px] font-medium uppercase tracking-wider text-term-dim;
+    @apply whitespace-nowrap px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-gray-400;
   }
 
-  /* Tabs: single style app-wide (pill, accent-tinted when active). */
+  /* Segmented control track for tab groups. */
+  .tab-track {
+    @apply inline-flex items-center gap-0.5 rounded-full bg-gray-100 p-0.5;
+  }
+
+  /* Tabs: single style app-wide (pill on light gray track). */
   .tab {
-    @apply rounded px-2.5 py-1 text-xs text-term-dim transition-colors hover:text-term-text focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent;
+    @apply rounded-full px-3 py-1 text-xs font-medium text-term-dim transition-colors hover:text-term-text focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent;
   }
   .tab-active {
-    @apply bg-term-accent/15 text-term-accent hover:text-term-accent;
+    @apply bg-white text-term-text shadow-sm ring-1 ring-gray-200 hover:text-term-text;
   }
 
   /* Buttons. */
   .btn {
-    @apply rounded px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent disabled:opacity-40;
+    @apply rounded-full px-4 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent disabled:opacity-40;
   }
   .btn-ghost {
-    @apply border border-term-border text-term-dim hover:border-term-dim/50 hover:text-term-text;
+    @apply border border-term-border bg-white text-term-text hover:bg-gray-50;
   }
   .btn-primary {
-    @apply bg-term-accent font-semibold text-black hover:brightness-110;
+    @apply bg-term-accent text-white hover:brightness-105;
   }
 
   /* Inputs. */
   .input {
-    @apply w-full rounded border border-term-border bg-term-bg px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-term-dim/60 focus:border-term-accent;
+    @apply w-full rounded-lg border border-term-border bg-white px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-gray-400 focus:border-term-accent focus:ring-1 focus:ring-term-accent/40;
   }
 
   /* Skeleton loader block. */
   .skeleton {
-    @apply animate-pulse rounded bg-term-border/50;
+    @apply animate-pulse rounded-lg bg-gray-200;
   }
 }
 
@@ -59,12 +68,12 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0b0e11;
+  background: #fafafa;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e2730;
+  background: #d1d5db;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2a3540;
+  background: #9ca3af;
 }

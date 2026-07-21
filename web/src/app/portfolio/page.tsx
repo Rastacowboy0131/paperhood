@@ -98,16 +98,16 @@ export default function PortfolioPage() {
             </thead>
             <tbody>
               {pf.positions.map((p) => (
-                <tr key={p.token} className="border-t border-term-border/60 transition-colors hover:bg-term-hover">
-                  <td className="px-3 py-1.5">
+                <tr key={p.token} className="border-t border-gray-100 transition-colors hover:bg-gray-50">
+                  <td className="px-3 py-2.5">
                     <Link href={`/t/${p.token}`} className="font-semibold text-term-accent hover:underline">
                       {p.symbol}
                     </Link>
                   </td>
-                  <td className="num px-3 py-1.5 text-right">{fmtCompact(p.qtyDec)}</td>
-                  <td className="num px-3 py-1.5 text-right">${fmtUsd(p.costBasisUsd, 2)}</td>
-                  <td className="num px-3 py-1.5 text-right">${fmtUsd(p.markUsd, 2)}</td>
-                  <td className={`num px-3 py-1.5 text-right ${pnlClass(p.unrealizedPnlUsd)}`}>
+                  <td className="num px-3 py-2.5 text-right">{fmtCompact(p.qtyDec)}</td>
+                  <td className="num px-3 py-2.5 text-right">${fmtUsd(p.costBasisUsd, 2)}</td>
+                  <td className="num px-3 py-2.5 text-right">${fmtUsd(p.markUsd, 2)}</td>
+                  <td className={`num px-3 py-2.5 text-right ${pnlClass(p.unrealizedPnlUsd)}`}>
                     {sign(p.unrealizedPnlUsd)}${fmtUsd(p.unrealizedPnlUsd, 2)}
                   </td>
                 </tr>
@@ -142,26 +142,26 @@ export default function PortfolioPage() {
             </thead>
             <tbody>
               {pf.history.map((t) => (
-                <tr key={t.id} className="border-t border-term-border/60 transition-colors hover:bg-term-hover">
-                  <td className="num px-3 py-1.5 text-xs text-term-dim">
+                <tr key={t.id} className="border-t border-gray-100 transition-colors hover:bg-gray-50">
+                  <td className="num px-3 py-2.5 text-xs text-term-dim">
                     {new Date(t.ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </td>
-                  <td className={`px-3 py-1.5 text-xs font-semibold ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>
+                  <td className={`px-3 py-2.5 text-xs font-semibold ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>
                     {t.side.toUpperCase()}
                   </td>
-                  <td className="px-3 py-1.5">
+                  <td className="px-3 py-2.5">
                     <Link href={`/t/${t.token}`} className="text-term-accent hover:underline" title={t.name}>
                       {t.symbol || truncAddr(t.token)}
                     </Link>
                   </td>
-                  <td className="num px-3 py-1.5 text-right">
+                  <td className="num px-3 py-2.5 text-right">
                     ${fmtUsd(Number(t.side === "buy" ? t.amountIn : t.amountOut), 2)}
                   </td>
-                  <td className="num px-3 py-1.5 text-right text-term-dim">${fmtUsd(t.feeUsd, 4)}</td>
-                  <td className="num px-3 py-1.5 text-right text-term-dim">
+                  <td className="num px-3 py-2.5 text-right text-term-dim">${fmtUsd(t.feeUsd, 4)}</td>
+                  <td className="num px-3 py-2.5 text-right text-term-dim">
                     {t.priceImpactPct != null ? `${t.priceImpactPct.toFixed(2)}%` : "-"}
                   </td>
-                  <td className={`num px-3 py-1.5 text-right ${t.realizedPnlUsd != null ? pnlClass(t.realizedPnlUsd) : "text-term-dim"}`}>
+                  <td className={`num px-3 py-2.5 text-right ${t.realizedPnlUsd != null ? pnlClass(t.realizedPnlUsd) : "text-term-dim"}`}>
                     {t.realizedPnlUsd != null ? `${sign(t.realizedPnlUsd)}$${fmtUsd(t.realizedPnlUsd, 2)}` : "-"}
                   </td>
                 </tr>
