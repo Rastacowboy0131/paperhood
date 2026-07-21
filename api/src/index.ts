@@ -7,9 +7,11 @@ import websocket from "@fastify/websocket";
 import { DatabaseSync } from "node:sqlite";
 import { openDb } from "../../engine/src/db.js";
 import { quoteSwap, getTokenMeta } from "../../engine/src/quote.js";
-import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd } from "../../engine/src/ledger.js";
+import { buy, sell, getPortfolio, getEthUsd, getSeasonId, cashBalanceUsd, seasonInfo, listSeasons } from "../../engine/src/ledger.js";
 import { createOrder, listOrders, cancelOrder, checkOpenOrders, OrderSide, OrderType } from "../../engine/src/orders.js";
-import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, LeaderboardWindow } from "../../engine/src/leaderboard.js";
+import { dailyLeaderboard, weeklyLeaderboard, windowLeaderboard, seasonLeaderboard, seasonArchive, LeaderboardWindow } from "../../engine/src/leaderboard.js";
+import { checkBadges, getUserBadges, badgesForUsers, BADGE_DEFS } from "../../engine/src/badges.js";
+import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/src/equity.js";
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, EXPLORER_URL } from "./tokeninfo.js";
@@ -210,6 +212,7 @@ export async function buildServer(opts: BuildOpts = {}) {
         const usd = Number(body.amount);
         if (!(usd > 0)) return reply.code(400).send({ error: "amount must be a positive USD number for buys" });
         const r = await buy(db, user.userId, pool.pair_address, body.token, usd);
+        afterTrade(user.userId);
         return {
           tradeId: r.tradeId,
           side: "buy",
@@ -225,6 +228,7 @@ export async function buildServer(opts: BuildOpts = {}) {
         let qty: bigint;
         try { qty = BigInt(body.amount); } catch { return reply.code(400).send({ error: "amount must be an integer string (raw token units) for sells" }); }
         const r = await sell(db, user.userId, pool.pair_address, body.token, qty);
+        afterTrade(user.userId);
         return {
           tradeId: r.tradeId,
           side: "sell",
@@ -240,6 +244,13 @@ export async function buildServer(opts: BuildOpts = {}) {
       return reply.code(400).send({ error: (e as Error).message });
     }
   });
+
+  // Post-trade bookkeeping: recompute badges and snapshot equity. Fire and
+  // forget so trades stay fast.
+  function afterTrade(userId: number): void {
+    try { checkBadges(db, userId); } catch (e) { app.log.error(e, "badge check failed"); }
+    snapshotUser(db, userId, true).catch((e) => app.log.error(e, "equity snapshot failed"));
+  }
 
   app.get("/portfolio", { preHandler: auth }, async (req) => {
     const user = (req as AuthedRequest).user;
@@ -277,6 +288,66 @@ export async function buildServer(opts: BuildOpts = {}) {
       })),
       history,
     };
+  });
+
+  // Paginated closed-trade history (sells with realized PnL), all seasons.
+  app.get("/portfolio/closed", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    const q = req.query as { page?: string; pageSize?: string };
+    const pageSize = Math.min(Math.max(parseInt(q.pageSize || "20", 10) || 20, 1), 100);
+    const page = Math.max(parseInt(q.page || "1", 10) || 1, 1);
+    const total = (db.prepare(
+      "SELECT COUNT(*) AS c FROM trades WHERE user_id = ? AND side = 'sell'"
+    ).get(user.userId) as { c: number }).c;
+    const rows = db.prepare(
+      `SELECT t.id, t.token_address AS token,
+              COALESCE(tok.symbol, po.symbol, '?') AS symbol,
+              t.amount_in AS amountIn, t.amount_out AS amountOut,
+              t.exec_price AS exitPriceUsd, t.realized_pnl AS realizedPnlUsd, t.ts
+       FROM trades t
+       LEFT JOIN tokens tok ON tok.address = t.token_address
+       LEFT JOIN pools po ON po.pair_address = t.pair_address
+       WHERE t.user_id = ? AND t.side = 'sell'
+       ORDER BY t.id DESC LIMIT ? OFFSET ?`
+    ).all(user.userId, pageSize, (page - 1) * pageSize) as {
+      id: number; token: string; symbol: string; amountIn: string; amountOut: string;
+      exitPriceUsd: number; realizedPnlUsd: number | null; ts: number;
+    }[];
+    // Entry price is derivable: cost basis = proceeds - realized pnl, over qty.
+    const decStmt = db.prepare("SELECT decimals FROM tokens WHERE address = ?");
+    const trades = rows.map((r) => {
+      const dec = (decStmt.get(r.token) as { decimals: number } | undefined)?.decimals ?? 18;
+      const qtyDec = Number(r.amountIn) / 10 ** dec;
+      const proceeds = Number(r.amountOut);
+      const pnl = r.realizedPnlUsd ?? 0;
+      const cost = proceeds - pnl;
+      const entryPriceUsd = qtyDec > 0 ? cost / qtyDec : null;
+      const pnlPct = cost > 0 ? (pnl / cost) * 100 : null;
+      return {
+        id: r.id, token: r.token, symbol: r.symbol, qtyDec,
+        entryPriceUsd, exitPriceUsd: r.exitPriceUsd,
+        proceedsUsd: proceeds, realizedPnlUsd: r.realizedPnlUsd, pnlPct, ts: r.ts,
+      };
+    });
+    return { page, pageSize, total, trades };
+  });
+
+  // Equity curve for the profile chart (current season by default).
+  app.get("/portfolio/equity", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    const q = req.query as { season?: string };
+    const seasonId = q.season ? Number(q.season) : getSeasonId(db);
+    if (!Number.isInteger(seasonId) || seasonId <= 0) return { seasonId: null, points: [] };
+    // Make sure there is a fresh point when the page loads.
+    await snapshotUser(db, user.userId);
+    return { seasonId, points: getEquityCurve(db, user.userId, seasonId) };
+  });
+
+  // Badges for the signed-in user.
+  app.get("/badges/me", { preHandler: auth }, async (req) => {
+    const user = (req as AuthedRequest).user;
+    checkBadges(db, user.userId);
+    return { defs: BADGE_DEFS, badges: getUserBadges(db, user.userId) };
   });
 
   // ---------- limit / stop orders (authed) ----------
@@ -328,24 +399,48 @@ export async function buildServer(opts: BuildOpts = {}) {
   // Order execution loop: check open orders against fresh snapshot prices.
   // Skipped in tests (call checkOpenOrders directly there).
   let orderTimer: NodeJS.Timeout | null = null;
+  let equityTimer: NodeJS.Timeout | null = null;
   if (process.env.NODE_ENV !== "test") {
     const iv = Number(process.env.ORDER_CHECK_INTERVAL_MS || 10000);
     orderTimer = setInterval(() => {
       checkOpenOrders(db).catch((e) => app.log.error(e, "order check failed"));
     }, iv);
     orderTimer.unref();
+    // Periodic equity sampler for the profile curve.
+    const eiv = Number(process.env.EQUITY_SNAPSHOT_INTERVAL_MS || 10 * 60 * 1000);
+    equityTimer = setInterval(() => {
+      snapshotActiveUsers(db).catch((e) => app.log.error(e, "equity sampler failed"));
+    }, eiv);
+    equityTimer.unref();
   }
 
   // ---------- leaderboard ----------
 
   app.get("/leaderboard", async (req, reply) => {
-    const q = req.query as { period?: string; window?: string };
+    const q = req.query as { period?: string; window?: string; season?: string };
+    // Season-scoped: ?season=current or ?season=<id> (monthly seasons, fresh 10k).
+    if (q.season != null) {
+      const seasonId = q.season === "current" ? getSeasonId(db) : Number(q.season);
+      const info = Number.isInteger(seasonId) && seasonId > 0 ? seasonInfo(db, seasonId) : null;
+      if (!info) return reply.code(404).send({ error: "unknown season" });
+      const entries = seasonLeaderboard(db, info.id);
+      const badgeMap = badgesForUsers(db, entries.map((e) => e.userId));
+      return {
+        season: info,
+        entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [] })),
+      };
+    }
     // New windowed API: ?window=1d|7d|all (rolling windows, all seasons).
     if (q.window != null) {
       if (q.window !== "1d" && q.window !== "7d" && q.window !== "all") {
         return reply.code(400).send({ error: "window must be 1d, 7d, or all" });
       }
-      return { window: q.window, entries: windowLeaderboard(db, q.window as LeaderboardWindow) };
+      const entries = windowLeaderboard(db, q.window as LeaderboardWindow);
+      const badgeMap = badgesForUsers(db, entries.map((e) => e.userId));
+      return {
+        window: q.window,
+        entries: entries.map((e) => ({ ...e, badges: badgeMap.get(e.userId) ?? [] })),
+      };
     }
     // Backward compat: ?period=daily|weekly (season-scoped, UTC day / season start).
     const period = q.period || "weekly";
@@ -354,6 +449,19 @@ export async function buildServer(opts: BuildOpts = {}) {
     }
     const entries = period === "daily" ? dailyLeaderboard(db) : weeklyLeaderboard(db);
     return { period, entries };
+  });
+
+  // ---------- seasons ----------
+
+  // Current season plus the archive of past winners (top 3 per season).
+  app.get("/seasons", async () => {
+    const current = seasonInfo(db, getSeasonId(db));
+    return {
+      current,
+      badgeDefs: BADGE_DEFS,
+      archive: seasonArchive(db).map((a) => ({ season: a.season, winners: a.winners })),
+      all: listSeasons(db),
+    };
   });
 
   // ---------- prize pool ----------

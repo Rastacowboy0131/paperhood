@@ -4,6 +4,8 @@
 // validation still applies.
 import { DatabaseSync } from "node:sqlite";
 import { buy, sell, positionQty, getSeasonId } from "./ledger.js";
+import { checkBadges } from "./badges.js";
+import { snapshotUser } from "./equity.js";
 
 export type OrderSide = "buy" | "sell";
 export type OrderType = "limit" | "stop";
@@ -159,6 +161,9 @@ export async function checkOpenOrders(db: DatabaseSync): Promise<number> {
       db.prepare("UPDATE orders SET status='failed', filled_at=?, fail_reason=? WHERE id=?")
         .run(now, (e as Error).message, o.id);
     }
+    // Fills change trade history: refresh badges and equity curve.
+    try { checkBadges(db, o.user_id); } catch { /* best effort */ }
+    snapshotUser(db, o.user_id, true).catch(() => {});
     changed++;
   }
   return changed;
