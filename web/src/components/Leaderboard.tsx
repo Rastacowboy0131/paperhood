@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, LeaderboardEntry, fmtUsd } from "@/lib/api";
 import PrizePoolBanner from "@/components/PrizePoolBanner";
+import { BadgeEmojis } from "@/components/Badges";
 
 type Window = "1d" | "7d" | "all";
 
@@ -40,7 +41,10 @@ function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
       <div className="mt-0.5 text-[11px] uppercase tracking-wider text-term-dim">#{rank}</div>
       {entry ? (
         <>
-          <div className="num mt-2 text-sm">{entry.display}</div>
+          <div className="num mt-2 text-sm">
+            {entry.display}
+            <BadgeEmojis keys={entry.badges} max={3} />
+          </div>
           <div className={`num mt-1 text-lg font-bold ${pnlColor(entry.realizedPnlUsd)}`}>
             {pnlStr(entry.realizedPnlUsd)}
           </div>
@@ -126,7 +130,10 @@ export default function Leaderboard() {
                   className="flex items-center gap-3 border-t border-term-line px-3 py-2 text-[13px] transition-colors first:border-t-0 hover:bg-term-hover"
                 >
                   <span className="num w-6 text-term-dim">{i + 4}</span>
-                  <span className="num">{e.display}</span>
+                  <span className="num">
+                    {e.display}
+                    <BadgeEmojis keys={e.badges} max={3} />
+                  </span>
                   <span className={`num ml-auto ${pnlColor(e.realizedPnlUsd)}`}>
                     {pnlStr(e.realizedPnlUsd)}
                   </span>

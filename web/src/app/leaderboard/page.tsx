@@ -1,31 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, LeaderboardEntry, fmtUsd } from "@/lib/api";
+import { api, LeaderboardEntry, SeasonInfo, SeasonsResponse, fmtUsd } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import PrizePoolBanner from "@/components/PrizePoolBanner";
+import { BadgeEmojis } from "@/components/Badges";
 
-type Period = "1d" | "7d" | "all";
+type Period = "1d" | "7d" | "all" | "season";
 
 const TABS: { key: Period; label: string }[] = [
   { key: "1d", label: "Daily" },
   { key: "7d", label: "Weekly" },
+  { key: "season", label: "Season" },
   { key: "all", label: "All time" },
 ];
+
+function seasonRange(s: SeasonInfo): string {
+  const f = (ts: number) =>
+    new Date(ts * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return `${f(s.startTs)} to ${f(s.endTs - 1)} UTC`;
+}
 
 export default function LeaderboardPage() {
   const { address } = useAuth();
   const [period, setPeriod] = useState<Period>("1d");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [season, setSeason] = useState<SeasonInfo | null>(null);
+  const [seasons, setSeasons] = useState<SeasonsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .leaderboardWindow(period)
-      .then((r) => setEntries(r.entries))
-      .catch((e) => setErr(e.message));
+    api.seasons().then(setSeasons).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const load = () => {
+      if (period === "season") {
+        return api
+          .leaderboardSeason("current")
+          .then((r) => {
+            setEntries(r.entries);
+            setSeason(r.season);
+          });
+      }
+      return api.leaderboardWindow(period).then((r) => setEntries(r.entries));
+    };
+    load().catch((e) => setErr(e.message));
     const id = setInterval(() => {
-      api.leaderboardWindow(period).then((r) => setEntries(r.entries)).catch(() => {});
+      load().catch(() => {});
     }, 20000);
     return () => clearInterval(id);
   }, [period]);
@@ -49,7 +71,14 @@ export default function LeaderboardPage() {
           ))}
         </div>
       </div>
-      <PrizePoolBanner window={period} />
+      {period === "season" && season && (
+        <div className="panel mb-3 flex items-center gap-2 px-3 py-2 text-xs">
+          <span className="font-semibold">Season {season.num}</span>
+          <span className="text-term-dim">{seasonRange(season)}</span>
+          <span className="ml-auto text-term-dim">fresh $10k each season</span>
+        </div>
+      )}
+      {period !== "season" && <PrizePoolBanner window={period as "1d" | "7d" | "all"} />}
       {err && <div className="mb-3 text-sm text-term-red">{err}</div>}
       <div className="panel overflow-x-auto">
         <table className="w-full text-[13px]">
@@ -76,6 +105,7 @@ export default function LeaderboardPage() {
                   </td>
                   <td className="num px-3 py-2.5">
                     {e.display}
+                    <BadgeEmojis keys={e.badges} max={3} />
                     {isMe && <span className="ml-2 rounded-full bg-term-accent px-2 text-xs font-medium text-white">you</span>}
                   </td>
                   <td className={`num px-3 py-2.5 text-right ${e.realizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
@@ -100,6 +130,39 @@ export default function LeaderboardPage() {
           </tbody>
         </table>
       </div>
+
+      {seasons && seasons.archive.length > 0 && (
+        <section className="mt-6">
+          <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Past seasons</h2>
+          <div className="space-y-3">
+            {seasons.archive.map((a) => (
+              <div key={a.season.id} className="panel px-3 py-2.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-semibold">Season {a.season.num}</span>
+                  <span className="text-term-dim">{seasonRange(a.season)}</span>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {a.winners.map((w, i) => (
+                    <div key={w.userId} className="flex items-center gap-2 text-[13px]">
+                      <span>{i === 0 ? "\ud83e\udd47" : i === 1 ? "\ud83e\udd48" : "\ud83e\udd49"}</span>
+                      <span className="num">{w.display}</span>
+                      <BadgeEmojis keys={w.badges} max={3} />
+                      <span className={`num ml-auto ${w.realizedPnlUsd >= 0 ? "text-term-green" : "text-term-red"}`}>
+                        {w.realizedPnlUsd >= 0 ? "+" : ""}${fmtUsd(w.realizedPnlUsd, 2)}
+                      </span>
+                      <span className={`num w-20 text-right text-xs ${w.pnlPct >= 0 ? "text-term-green" : "text-term-red"}`}>
+                        {w.pnlPct >= 0 ? "+" : ""}
+                        {w.pnlPct.toFixed(2)}%
+                      </span>
+                    </div>
+                  ))}
+                  {!a.winners.length && <div className="text-xs text-term-dim">No closed trades that season.</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
