@@ -7,6 +7,7 @@ import { useLivePrices } from "@/lib/ws";
 import { useDenom } from "@/lib/denom";
 import Leaderboard from "@/components/Leaderboard";
 import { TokenLogo } from "@/components/TokenLogo";
+import { SocialLinks } from "@/components/SocialLinks";
 
 type SortKey = "symbol" | "mcapUsd" | "change24hPct" | "liquidityUsd" | "volume24hUsd" | "priceUsd";
 
@@ -202,13 +203,16 @@ export default function Screener() {
                           <span className="font-semibold">{(t.symbol || "").slice(0, 12)}</span>{" "}
                           <span className="text-xs text-term-dim">{(t.name || "").slice(0, 28)}</span>
                         </div>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); copyAddr(t.address); }}
-                          className="num text-[10px] text-term-faint hover:text-term-dim"
-                          title="Copy address"
-                        >
-                          {copied === t.address ? "copied" : `${t.address.slice(0, 6)}..${t.address.slice(-4)}`}
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); copyAddr(t.address); }}
+                            className="num text-[10px] text-term-faint hover:text-term-dim"
+                            title="Copy address"
+                          >
+                            {copied === t.address ? "copied" : `${t.address.slice(0, 6)}..${t.address.slice(-4)}`}
+                          </button>
+                          <SocialLinks website={t.website} twitter={t.twitter} telegram={t.telegram} size={18} />
+                        </div>
                       </div>
                     </div>
                   </td>
