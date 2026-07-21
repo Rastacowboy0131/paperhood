@@ -6,6 +6,7 @@ import PrizePoolBanner from "@/components/PrizePoolBanner";
 import { BadgeEmojis } from "@/components/Badges";
 
 type Window = "1d" | "7d" | "all";
+type Metric = "equity" | "realized";
 
 const TABS: { key: Window; label: string }[] = [
   { key: "1d", label: "Daily" },
@@ -14,6 +15,7 @@ const TABS: { key: Window; label: string }[] = [
 ];
 
 const LS_KEY = "leaderboard-window";
+const LS_METRIC_KEY = "leaderboard-metric";
 
 function pnlColor(v: number) {
   return v >= 0 ? "text-term-green" : "text-term-red";
@@ -63,12 +65,15 @@ function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
 
 export default function Leaderboard() {
   const [win, setWin] = useState<Window>("1d");
+  const [metric, setMetric] = useState<Metric>("equity");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(LS_KEY) as Window | null;
     if (saved === "1d" || saved === "7d" || saved === "all") setWin(saved);
+    const savedMetric = localStorage.getItem(LS_METRIC_KEY) as Metric | null;
+    if (savedMetric === "equity" || savedMetric === "realized") setMetric(savedMetric);
     setLoaded(true);
   }, []);
 
@@ -77,7 +82,7 @@ export default function Leaderboard() {
     let alive = true;
     const load = () =>
       api
-        .leaderboardWindow(win)
+        .leaderboardWindow(win, metric)
         .then((r) => {
           if (alive) setEntries(r.entries);
         })
@@ -88,7 +93,7 @@ export default function Leaderboard() {
       alive = false;
       clearInterval(id);
     };
-  }, [win, loaded]);
+  }, [win, metric, loaded]);
 
   const top3 = entries.slice(0, 3);
   const rest = entries.slice(3, 10);
@@ -97,7 +102,7 @@ export default function Leaderboard() {
     <div className="mb-6">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-sm font-bold">Leaderboard</h2>
-        <span className="text-[11px] uppercase tracking-wider text-term-dim">equity PnL</span>
+        <span className="text-[11px] uppercase tracking-wider text-term-dim">{metric} PnL</span>
         <div className="ml-auto flex gap-1">
           {TABS.map((t) => (
             <button
@@ -112,6 +117,20 @@ export default function Leaderboard() {
             </button>
           ))}
         </div>
+      </div>
+      <div className="mb-3 flex gap-1">
+        {(["equity", "realized"] as Metric[]).map((m) => (
+          <button
+            key={m}
+            onClick={() => {
+              setMetric(m);
+              localStorage.setItem(LS_METRIC_KEY, m);
+            }}
+            className={`tab ${metric === m ? "tab-active" : ""}`}
+          >
+            {m === "equity" ? "Equity" : "Realized"}
+          </button>
+        ))}
       </div>
 
       <PrizePoolBanner window={win} />
