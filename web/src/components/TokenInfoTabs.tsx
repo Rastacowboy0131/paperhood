@@ -107,7 +107,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
 
   return (
     <div className="panel mt-4">
-      <div className="flex gap-1 border-b border-term-line p-2">
+      <div className="sticky top-0 z-10 flex gap-1 rounded-t-lg border-b border-term-line bg-term-panel p-2">
         <div className="tab-track">
         {TABS.map((t) => (
           <button
