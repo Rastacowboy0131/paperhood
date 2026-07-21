@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { api, Portfolio, fmtUsd, fmtCompact, truncAddr } from "@/lib/api";
+import { api, ClosedTrade, EquityPoint, Portfolio, UserBadge, fmtUsd, fmtCompact, truncAddr } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { EquityChart } from "@/components/EquityChart";
+import { BadgeGrid } from "@/components/Badges";
+import { ShareButton } from "@/components/ShareCard";
 
 function pnlClass(n: number) {
   return n >= 0 ? "text-term-green" : "text-term-red";
@@ -17,11 +20,25 @@ export default function PortfolioPage() {
   const { address, loading } = useAuth();
   const [pf, setPf] = useState<Portfolio | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [equity, setEquity] = useState<EquityPoint[]>([]);
+  const [badges, setBadges] = useState<UserBadge[]>([]);
+  const [closed, setClosed] = useState<{ trades: ClosedTrade[]; total: number } | null>(null);
+  const [closedPage, setClosedPage] = useState(1);
+  const CLOSED_PAGE_SIZE = 20;
 
   const refresh = useCallback(() => {
     if (!address) return;
     api.portfolio().then(setPf).catch((e) => setErr(e.message));
+    api.equityCurve().then((r) => setEquity(r.points)).catch(() => {});
+    api.myBadges().then((r) => setBadges(r.badges)).catch(() => {});
   }, [address]);
+
+  useEffect(() => {
+    if (!address) return;
+    api.closedTrades(closedPage, CLOSED_PAGE_SIZE)
+      .then((r) => setClosed({ trades: r.trades, total: r.total }))
+      .catch(() => {});
+  }, [address, closedPage]);
 
   useEffect(() => {
     refresh();
@@ -84,6 +101,22 @@ export default function PortfolioPage() {
       </div>
 
       <section>
+        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Equity curve (this season)</h2>
+        <div className="panel p-2">
+          {equity.length > 1 ? (
+            <EquityChart points={equity} />
+          ) : (
+            <div className="py-10 text-center text-xs text-term-dim">Not enough data yet. The curve fills in as you trade.</div>
+          )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Badges</h2>
+        <BadgeGrid badges={badges} />
+      </section>
+
+      <section>
         <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Open positions (marked to exit)</h2>
         <div className="panel overflow-x-auto">
           <table className="w-full text-[13px]">
@@ -94,6 +127,7 @@ export default function PortfolioPage() {
                 <th className="th text-right">Cost basis</th>
                 <th className="th text-right">Mark</th>
                 <th className="th text-right">Unrealized</th>
+                <th className="th text-right"></th>
               </tr>
             </thead>
             <tbody>
@@ -110,11 +144,24 @@ export default function PortfolioPage() {
                   <td className={`num px-3 py-2.5 text-right ${pnlClass(p.unrealizedPnlUsd)}`}>
                     {sign(p.unrealizedPnlUsd)}${fmtUsd(p.unrealizedPnlUsd, 2)}
                   </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <ShareButton
+                      data={{
+                        symbol: p.symbol,
+                        side: "long",
+                        entryPriceUsd: p.qtyDec > 0 ? p.costBasisUsd / p.qtyDec : null,
+                        exitPriceUsd: p.qtyDec > 0 ? p.markUsd / p.qtyDec : null,
+                        pnlPct: p.costBasisUsd > 0 ? (p.unrealizedPnlUsd / p.costBasisUsd) * 100 : null,
+                        pnlUsd: p.unrealizedPnlUsd,
+                        username: truncAddr(pf.user.address),
+                      }}
+                    />
+                  </td>
                 </tr>
               ))}
               {!pf.positions.length && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-term-dim">
+                  <td colSpan={6} className="px-3 py-8 text-center text-term-dim">
                     <div className="text-lg">◎</div>
                     <div className="mt-1 text-xs">No open positions. <Link href="/" className="text-term-accent underline">Find a token</Link></div>
                   </td>
@@ -122,6 +169,91 @@ export default function PortfolioPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">Closed trades (all seasons)</h2>
+        <div className="panel overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead className="bg-term-panel">
+              <tr>
+                <th className="th text-left">Date</th>
+                <th className="th text-left">Token</th>
+                <th className="th text-right">Qty</th>
+                <th className="th text-right">Entry</th>
+                <th className="th text-right">Exit</th>
+                <th className="th text-right">PnL</th>
+                <th className="th text-right">PnL %</th>
+                <th className="th text-right"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {closed?.trades.map((t) => (
+                <tr key={t.id} className="border-t border-term-line transition-colors hover:bg-term-hover">
+                  <td className="num px-3 py-2.5 text-xs text-term-dim">
+                    {new Date(t.ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <Link href={`/t/${t.token}`} className="font-semibold text-term-accent hover:underline">
+                      {t.symbol || truncAddr(t.token)}
+                    </Link>
+                  </td>
+                  <td className="num px-3 py-2.5 text-right">{fmtCompact(t.qtyDec)}</td>
+                  <td className="num px-3 py-2.5 text-right">{t.entryPriceUsd != null ? `$${fmtUsd(t.entryPriceUsd)}` : "-"}</td>
+                  <td className="num px-3 py-2.5 text-right">${fmtUsd(t.exitPriceUsd)}</td>
+                  <td className={`num px-3 py-2.5 text-right ${t.realizedPnlUsd != null ? pnlClass(t.realizedPnlUsd) : "text-term-dim"}`}>
+                    {t.realizedPnlUsd != null ? `${sign(t.realizedPnlUsd)}$${fmtUsd(t.realizedPnlUsd, 2)}` : "-"}
+                  </td>
+                  <td className={`num px-3 py-2.5 text-right ${t.pnlPct != null ? pnlClass(t.pnlPct) : "text-term-dim"}`}>
+                    {t.pnlPct != null ? `${sign(t.pnlPct)}${t.pnlPct.toFixed(2)}%` : "-"}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    <ShareButton
+                      data={{
+                        symbol: t.symbol || truncAddr(t.token),
+                        side: "closed",
+                        entryPriceUsd: t.entryPriceUsd,
+                        exitPriceUsd: t.exitPriceUsd,
+                        pnlPct: t.pnlPct,
+                        pnlUsd: t.realizedPnlUsd,
+                        username: truncAddr(pf.user.address),
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+              {(!closed || !closed.trades.length) && (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-term-dim">
+                    <div className="text-lg">◎</div>
+                    <div className="mt-1 text-xs">No closed trades yet.</div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+          {closed && closed.total > CLOSED_PAGE_SIZE && (
+            <div className="flex items-center gap-2 border-t border-term-line px-3 py-2 text-xs">
+              <button
+                disabled={closedPage <= 1}
+                onClick={() => setClosedPage((p) => p - 1)}
+                className="rounded border border-term-border px-2 py-0.5 text-term-dim transition-colors enabled:hover:text-term-text disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <span className="num text-term-dim">
+                Page {closedPage} / {Math.max(1, Math.ceil(closed.total / CLOSED_PAGE_SIZE))}
+              </span>
+              <button
+                disabled={closedPage >= Math.ceil(closed.total / CLOSED_PAGE_SIZE)}
+                onClick={() => setClosedPage((p) => p + 1)}
+                className="rounded border border-term-border px-2 py-0.5 text-term-dim transition-colors enabled:hover:text-term-text disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
