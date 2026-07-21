@@ -12,13 +12,16 @@ export const metadata: Metadata = {
   description: "Paper trading terminal for Robinhood Chain",
 };
 
-export const viewport = {
-  themeColor: "#ffffff",
-};
+// Runs before paint: applies persisted theme so there is no flash.
+// Default is light when nothing is stored.
+const themeBootScript = `(function(){try{var t=localStorage.getItem("theme");var d=t==="dark";var r=document.documentElement;r.classList.toggle("dark",d);var m=document.querySelector('meta[name="theme-color"]');if(!m){m=document.createElement("meta");m.setAttribute("name","theme-color");document.head.appendChild(m);}m.setAttribute("content",d?"#0b0e11":"#ffffff");}catch(e){}})();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script id="theme-boot" dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
       <body className="min-h-screen">
         <Providers>
           <Nav />

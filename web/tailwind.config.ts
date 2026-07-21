@@ -1,22 +1,30 @@
 import type { Config } from "tailwindcss";
 
+// term-* colors resolve through CSS variables so light/dark themes swap at
+// runtime via the .dark class on <html>. Variables live in globals.css.
+const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
         term: {
-          bg: "#fafafa",
-          panel: "#ffffff",
-          raised: "#f3f4f6",
-          hover: "#f9fafb",
-          border: "#e5e7eb",
-          text: "#1f2937",
-          dim: "#6b7280",
-          accent: "#00c805",
-          green: "#00a305",
-          red: "#ff5000",
-          amber: "#d97706",
+          bg: v("term-bg"),
+          panel: v("term-panel"),
+          raised: v("term-raised"),
+          hover: v("term-hover"),
+          border: v("term-border"),
+          line: v("term-line"),
+          text: v("term-text"),
+          dim: v("term-dim"),
+          faint: v("term-faint"),
+          skeleton: v("term-skeleton"),
+          accent: v("term-accent"),
+          green: v("term-green"),
+          red: v("term-red"),
+          amber: v("term-amber"),
         },
       },
       fontFamily: {
@@ -25,11 +33,11 @@ const config: Config = {
       },
       keyframes: {
         flashUp: {
-          "0%": { backgroundColor: "rgba(0, 200, 5, 0.12)" },
+          "0%": { backgroundColor: "rgb(var(--term-green) / 0.12)" },
           "100%": { backgroundColor: "transparent" },
         },
         flashDown: {
-          "0%": { backgroundColor: "rgba(255, 80, 0, 0.10)" },
+          "0%": { backgroundColor: "rgb(var(--term-red) / 0.10)" },
           "100%": { backgroundColor: "transparent" },
         },
       },

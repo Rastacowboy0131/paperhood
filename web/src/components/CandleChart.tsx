@@ -15,6 +15,28 @@ export interface ChartLine {
   title: string;
 }
 
+// Chart chrome per theme. Candles stay the same green/red on both.
+const CHART_THEMES = {
+  light: {
+    bg: "#ffffff",
+    text: "#6b7280",
+    grid: "#f3f4f6",
+    border: "#e5e7eb",
+  },
+  dark: {
+    bg: "#11161c",
+    text: "#5f6f7f",
+    grid: "#1a222a",
+    border: "#1e2730",
+  },
+};
+
+function currentTheme(): "light" | "dark" {
+  return typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+    ? "dark"
+    : "light";
+}
+
 export function CandleChart({
   candles,
   multiplier,
@@ -34,19 +56,20 @@ export function CandleChart({
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const t = CHART_THEMES[currentTheme()];
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { type: ColorType.Solid, color: "#ffffff" },
-        textColor: "#6b7280",
+        background: { type: ColorType.Solid, color: t.bg },
+        textColor: t.text,
       },
       grid: {
-        vertLines: { color: "#f3f4f6" },
-        horzLines: { color: "#f3f4f6" },
+        vertLines: { color: t.grid },
+        horzLines: { color: t.grid },
       },
       width: containerRef.current.clientWidth,
       height: 420,
-      timeScale: { timeVisible: true, secondsVisible: false, borderColor: "#e5e7eb" },
-      rightPriceScale: { borderColor: "#e5e7eb" },
+      timeScale: { timeVisible: true, secondsVisible: false, borderColor: t.border },
+      rightPriceScale: { borderColor: t.border },
     });
     const series = chart.addCandlestickSeries({
       upColor: "#22c55e",
@@ -65,7 +88,21 @@ export function CandleChart({
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
     };
     window.addEventListener("resize", onResize);
+
+    // Follow theme switches: watch <html> class and restyle the chart chrome.
+    const observer = new MutationObserver(() => {
+      const nt = CHART_THEMES[currentTheme()];
+      chart.applyOptions({
+        layout: { background: { type: ColorType.Solid, color: nt.bg }, textColor: nt.text },
+        grid: { vertLines: { color: nt.grid }, horzLines: { color: nt.grid } },
+        timeScale: { borderColor: nt.border },
+        rightPriceScale: { borderColor: nt.border },
+      });
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+
     return () => {
+      observer.disconnect();
       window.removeEventListener("resize", onResize);
       chart.remove();
       chartRef.current = null;

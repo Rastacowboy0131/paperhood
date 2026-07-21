@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth, DEV_AUTH } from "@/lib/auth";
 import { truncAddr } from "@/lib/api";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const links = [
   { href: "/", label: "Screener" },
@@ -16,7 +17,7 @@ export function Nav() {
   const { address, loading, signingIn, error, signIn, devSignIn, signOut } = useAuth();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-term-border bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-term-border bg-term-panel/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4">
         <Link href="/" className="flex items-baseline gap-1 text-[17px] font-bold tracking-tight">
           <span className="text-term-accent">Paper</span>
@@ -39,6 +40,7 @@ export function Nav() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-2 text-sm">
+          <ThemeToggle />
           {error && (
             <span className="max-w-96 break-words text-xs leading-tight text-term-red" title={error}>
               {error}
@@ -48,7 +50,7 @@ export function Nav() {
             <span className="skeleton h-6 w-24" />
           ) : address ? (
             <>
-              <span className="num rounded-full border border-term-border bg-gray-50 px-3 py-1 text-xs font-medium text-term-text">
+              <span className="num rounded-full border border-term-border bg-term-raised px-3 py-1 text-xs font-medium text-term-text">
                 {truncAddr(address)}
               </span>
               <button onClick={signOut} className="btn btn-ghost">

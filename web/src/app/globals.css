@@ -2,8 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme tokens as raw RGB channels so Tailwind alpha works.
+   Light is default; .dark on <html> flips to the terminal palette. */
 :root {
   color-scheme: light;
+  --term-bg: 250 250 250;
+  --term-panel: 255 255 255;
+  --term-raised: 243 244 246;
+  --term-hover: 249 250 251;
+  --term-border: 229 231 235;
+  --term-line: 243 244 246; /* subtle row dividers (old gray-100) */
+  --term-text: 31 41 55;
+  --term-dim: 107 114 128;
+  --term-faint: 156 163 175; /* placeholder / micro-header text (old gray-400) */
+  --term-skeleton: 229 231 235;
+  --term-accent: 0 200 5;
+  --term-green: 0 163 5;
+  --term-red: 255 80 0;
+  --term-amber: 217 119 6;
+  --scrollbar-track: #fafafa;
+  --scrollbar-thumb: #d1d5db;
+  --scrollbar-thumb-hover: #9ca3af;
+}
+
+html.dark {
+  color-scheme: dark;
+  --term-bg: 11 14 17;
+  --term-panel: 17 22 28;
+  --term-raised: 22 29 36;
+  --term-hover: 21 27 34;
+  --term-border: 30 39 48;
+  --term-line: 26 34 42;
+  --term-text: 205 214 223;
+  --term-dim: 95 111 127;
+  --term-faint: 74 88 102;
+  --term-skeleton: 30 39 48;
+  --term-accent: 0 200 5;
+  --term-green: 31 196 122;
+  --term-red: 238 85 102;
+  --term-amber: 240 180 41;
+  --scrollbar-track: #0b0e11;
+  --scrollbar-thumb: #1e2730;
+  --scrollbar-thumb-hover: #2c3a48;
 }
 
 body {
@@ -20,25 +60,25 @@ body {
     @apply rounded-xl border border-term-border bg-term-panel shadow-sm;
   }
   .panel-header {
-    @apply flex items-center gap-2 border-b border-gray-100 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-term-dim;
+    @apply flex items-center gap-2 border-b border-term-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-term-dim;
   }
 
   /* Table micro-header cells. */
   .th {
-    @apply whitespace-nowrap px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-gray-400;
+    @apply whitespace-nowrap px-3 py-2.5 text-[11px] font-medium uppercase tracking-wider text-term-faint;
   }
 
   /* Segmented control track for tab groups. */
   .tab-track {
-    @apply inline-flex items-center gap-0.5 rounded-full bg-gray-100 p-0.5;
+    @apply inline-flex items-center gap-0.5 rounded-full bg-term-raised p-0.5;
   }
 
-  /* Tabs: single style app-wide (pill on light gray track). */
+  /* Tabs: single style app-wide (pill on raised track). */
   .tab {
     @apply rounded-full px-3 py-1 text-xs font-medium text-term-dim transition-colors hover:text-term-text focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent;
   }
   .tab-active {
-    @apply bg-white text-term-text shadow-sm ring-1 ring-gray-200 hover:text-term-text;
+    @apply bg-term-panel text-term-text shadow-sm ring-1 ring-term-border hover:text-term-text;
   }
 
   /* Buttons. */
@@ -46,7 +86,7 @@ body {
     @apply rounded-full px-4 py-1.5 text-xs font-semibold transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-term-accent disabled:opacity-40;
   }
   .btn-ghost {
-    @apply border border-term-border bg-white text-term-text hover:bg-gray-50;
+    @apply border border-term-border bg-term-panel text-term-text hover:bg-term-hover;
   }
   .btn-primary {
     @apply bg-term-accent text-white hover:brightness-105;
@@ -54,12 +94,12 @@ body {
 
   /* Inputs. */
   .input {
-    @apply w-full rounded-lg border border-term-border bg-white px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-gray-400 focus:border-term-accent focus:ring-1 focus:ring-term-accent/40;
+    @apply w-full rounded-lg border border-term-border bg-term-panel px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-term-faint focus:border-term-accent focus:ring-1 focus:ring-term-accent/40;
   }
 
   /* Skeleton loader block. */
   .skeleton {
-    @apply animate-pulse rounded-lg bg-gray-200;
+    @apply animate-pulse rounded-lg bg-term-skeleton;
   }
 }
 
@@ -68,12 +108,12 @@ body {
   height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #fafafa;
+  background: var(--scrollbar-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: var(--scrollbar-thumb-hover);
 }

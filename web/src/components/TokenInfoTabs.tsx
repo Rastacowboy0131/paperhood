@@ -105,7 +105,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
 
   return (
     <div className="panel mt-4">
-      <div className="flex gap-1 border-b border-gray-100 p-2">
+      <div className="flex gap-1 border-b border-term-line p-2">
         <div className="tab-track">
         {TABS.map((t) => (
           <button
@@ -143,7 +143,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {trades.map((t, i) => (
-                  <tr key={`${t.txHash}-${i}`} className="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50">
+                  <tr key={`${t.txHash}-${i}`} className="border-b border-term-line transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{timeAgo(t.ts)}</td>
                     <td className={`${tdCls} ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>
                       {t.side.toUpperCase()}
@@ -180,7 +180,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {topTraders.map((t, i) => (
-                  <tr key={t.wallet} className="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50">
+                  <tr key={t.wallet} className="border-b border-term-line transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{i + 1}</td>
                     <td className={tdCls}><AddrLink addr={t.wallet} explorer={explorer} /></td>
                     <td className={`${tdCls} text-right text-term-green`}>{t.buys}</td>
@@ -214,7 +214,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {holders.map((h, i) => (
-                  <tr key={h.address} className="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50">
+                  <tr key={h.address} className="border-b border-term-line transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{i + 1}</td>
                     <td className={tdCls}>
                       <AddrLink addr={h.address} explorer={explorer} />
@@ -251,7 +251,7 @@ export function TokenInfoTabs({ address, symbol }: { address: string; symbol: st
               </thead>
               <tbody>
                 {paper.map((t) => (
-                  <tr key={t.id} className="border-b border-gray-100 transition-colors last:border-0 hover:bg-gray-50">
+                  <tr key={t.id} className="border-b border-term-line transition-colors last:border-0 hover:bg-term-hover">
                     <td className={`${tdCls} text-term-dim`}>{timeAgo(t.ts)}</td>
                     <td className={tdCls}>{t.display}</td>
                     <td className={`${tdCls} ${t.side === "buy" ? "text-term-green" : "text-term-red"}`}>

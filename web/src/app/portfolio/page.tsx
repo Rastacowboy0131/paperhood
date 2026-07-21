@@ -98,7 +98,7 @@ export default function PortfolioPage() {
             </thead>
             <tbody>
               {pf.positions.map((p) => (
-                <tr key={p.token} className="border-t border-gray-100 transition-colors hover:bg-gray-50">
+                <tr key={p.token} className="border-t border-term-line transition-colors hover:bg-term-hover">
                   <td className="px-3 py-2.5">
                     <Link href={`/t/${p.token}`} className="font-semibold text-term-accent hover:underline">
                       {p.symbol}
@@ -142,7 +142,7 @@ export default function PortfolioPage() {
             </thead>
             <tbody>
               {pf.history.map((t) => (
-                <tr key={t.id} className="border-t border-gray-100 transition-colors hover:bg-gray-50">
+                <tr key={t.id} className="border-t border-term-line transition-colors hover:bg-term-hover">
                   <td className="num px-3 py-2.5 text-xs text-term-dim">
                     {new Date(t.ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </td>

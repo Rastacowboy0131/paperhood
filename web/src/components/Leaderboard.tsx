@@ -27,10 +27,10 @@ function PodiumCard({ entry, rank }: { entry?: LeaderboardEntry; rank: 1 | 2 | 3
   const medal = rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉";
   const accent =
     rank === 1
-      ? "border-yellow-300 bg-yellow-50"
+      ? "border-yellow-300 bg-yellow-50 dark:border-yellow-500/40 dark:bg-yellow-500/10"
       : rank === 2
-        ? "border-gray-200 bg-gray-50"
-        : "border-orange-200 bg-orange-50";
+        ? "border-term-border bg-term-raised"
+        : "border-orange-200 bg-orange-50 dark:border-orange-500/40 dark:bg-orange-500/10";
   const elevate = rank === 1 ? "sm:-translate-y-3 sm:scale-105" : "";
   return (
     <div
@@ -123,7 +123,7 @@ export default function Leaderboard() {
               {rest.map((e, i) => (
                 <div
                   key={e.userId}
-                  className="flex items-center gap-3 border-t border-gray-100 px-3 py-2 text-[13px] transition-colors first:border-t-0 hover:bg-gray-50"
+                  className="flex items-center gap-3 border-t border-term-line px-3 py-2 text-[13px] transition-colors first:border-t-0 hover:bg-term-hover"
                 >
                   <span className="num w-6 text-term-dim">{i + 4}</span>
                   <span className="num">{e.display}</span>

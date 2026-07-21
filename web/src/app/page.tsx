@@ -148,7 +148,7 @@ export default function Screener() {
                 <tr
                   key={t.address}
                   onClick={() => router.push(`/t/${t.address}`)}
-                  className={`cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50 ${
+                  className={`cursor-pointer border-t border-term-line transition-colors hover:bg-term-hover ${
                     flash === "up" ? "animate-flash-up" : flash === "down" ? "animate-flash-down" : ""
                   }`}
                 >
@@ -181,7 +181,7 @@ export default function Screener() {
             {loading &&
               !rows.length &&
               Array.from({ length: 8 }).map((_, i) => (
-                <tr key={`sk-${i}`} className="border-t border-gray-100">
+                <tr key={`sk-${i}`} className="border-t border-term-line">
                   {Array.from({ length: 6 }).map((_, j) => (
                     <td key={j} className="px-3 py-2">
                       <div className={`skeleton h-3.5 ${j === 0 ? "w-32" : "ml-auto w-16"}`} />

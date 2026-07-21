@@ -68,7 +68,7 @@ export default function LeaderboardPage() {
               return (
                 <tr
                   key={e.userId}
-                  className={`border-t border-gray-100 transition-colors hover:bg-gray-50 ${isMe ? "bg-term-accent/10" : ""}`}
+                  className={`border-t border-term-line transition-colors hover:bg-term-hover ${isMe ? "bg-term-accent/10" : ""}`}
                 >
                   <td className="num px-3 py-2.5">
                     {i + 1}

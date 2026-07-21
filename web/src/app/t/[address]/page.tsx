@@ -361,13 +361,13 @@ export default function TradePage() {
           <div className="mb-3 flex gap-1">
             <button
               onClick={() => setSide("buy")}
-              className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${side === "buy" ? "bg-term-accent text-white" : "border border-term-border bg-white text-term-dim hover:bg-gray-50 hover:text-term-text"}`}
+              className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${side === "buy" ? "bg-term-accent text-white" : "border border-term-border bg-term-panel text-term-dim hover:bg-term-hover hover:text-term-text"}`}
             >
               Buy
             </button>
             <button
               onClick={() => setSide("sell")}
-              className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${side === "sell" ? "bg-term-red text-white" : "border border-term-border bg-white text-term-dim hover:bg-gray-50 hover:text-term-text"}`}
+              className={`flex-1 rounded-full py-1.5 text-sm font-semibold transition-colors ${side === "sell" ? "bg-term-red text-white" : "border border-term-border bg-term-panel text-term-dim hover:bg-term-hover hover:text-term-text"}`}
             >
               Sell
             </button>
@@ -433,7 +433,7 @@ export default function TradePage() {
 
           {quoteErr && <div className="mb-2 text-xs text-term-red">{quoteErr}</div>}
           {quote && quoteOutDec != null && (
-            <div className="mb-3 space-y-1 rounded-lg bg-gray-50 p-3 text-xs">
+            <div className="mb-3 space-y-1 rounded-lg bg-term-raised p-3 text-xs">
               <div className="flex justify-between">
                 <span className="text-term-dim">You receive</span>
                 <span className="num">
@@ -546,19 +546,19 @@ export default function TradePage() {
             <div className="mb-2 flex gap-1">
               <button
                 onClick={() => setOrderSide("buy")}
-                className={`flex-1 rounded-full py-1 text-xs font-semibold transition-colors ${orderSide === "buy" ? "bg-term-accent text-white" : "border border-term-border bg-white text-term-dim hover:bg-gray-50 hover:text-term-text"}`}
+                className={`flex-1 rounded-full py-1 text-xs font-semibold transition-colors ${orderSide === "buy" ? "bg-term-accent text-white" : "border border-term-border bg-term-panel text-term-dim hover:bg-term-hover hover:text-term-text"}`}
               >
                 Limit buy
               </button>
               <button
                 onClick={() => { setOrderSide("sell"); setOrderType("limit"); }}
-                className={`flex-1 rounded-full py-1 text-xs font-semibold transition-colors ${orderSide === "sell" && orderType === "limit" ? "bg-term-accent text-white" : "border border-term-border bg-white text-term-dim hover:bg-gray-50 hover:text-term-text"}`}
+                className={`flex-1 rounded-full py-1 text-xs font-semibold transition-colors ${orderSide === "sell" && orderType === "limit" ? "bg-term-accent text-white" : "border border-term-border bg-term-panel text-term-dim hover:bg-term-hover hover:text-term-text"}`}
               >
                 TP
               </button>
               <button
                 onClick={() => { setOrderSide("sell"); setOrderType("stop"); }}
-                className={`flex-1 rounded-full py-1 text-xs font-semibold transition-colors ${orderSide === "sell" && orderType === "stop" ? "bg-term-red text-white" : "border border-term-border bg-white text-term-dim hover:bg-gray-50 hover:text-term-text"}`}
+                className={`flex-1 rounded-full py-1 text-xs font-semibold transition-colors ${orderSide === "sell" && orderType === "stop" ? "bg-term-red text-white" : "border border-term-border bg-term-panel text-term-dim hover:bg-term-hover hover:text-term-text"}`}
               >
                 SL
               </button>
@@ -621,7 +621,7 @@ export default function TradePage() {
               <div className="mt-3 space-y-1 text-xs">
                 <div className="text-[11px] uppercase tracking-wider text-term-dim">Open</div>
                 {openOrders.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-2 py-1">
+                  <div key={o.id} className="flex items-center justify-between rounded-lg bg-term-raised px-2 py-1">
                     <span className={`num ${o.side === "buy" || o.type === "limit" ? "text-term-green" : "text-term-red"}`}>
                       {o.side === "buy" ? "limit buy" : o.type === "stop" ? "SL" : "TP"}
                     </span>
