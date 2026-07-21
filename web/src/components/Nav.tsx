@@ -6,6 +6,7 @@ import { useAuth, DEV_AUTH } from "@/lib/auth";
 import { truncAddr } from "@/lib/api";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TourHelpButton } from "@/components/Tour";
+import { SoundToggle } from "@/components/SoundToggle";
 
 const links = [
   { href: "/", label: "Screener" },
@@ -42,6 +43,7 @@ export function Nav() {
         </nav>
         <div className="ml-auto flex items-center gap-2 text-sm">
           <TourHelpButton />
+          <SoundToggle />
           <ThemeToggle />
           {error && (
             <span className="max-w-96 break-words text-xs leading-tight text-term-red" title={error}>

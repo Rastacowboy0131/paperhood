@@ -10,6 +10,8 @@ import { TokenInfoTabs } from "@/components/TokenInfoTabs";
 import { TokenLogo } from "@/components/TokenLogo";
 import { useAuth } from "@/lib/auth";
 import { useDenom, fmtEth } from "@/lib/denom";
+import { useWatchlist } from "@/lib/watchlist";
+import { playBuyFill, playSellFill, playOrderTriggered } from "@/lib/sounds";
 
 // Parse a number with optional k/m/b suffix ("2.5M" -> 2500000).
 function parseSuffixed(s: string): number {
@@ -248,7 +250,14 @@ export default function TradePage() {
 
   const refreshOrders = useCallback(() => {
     if (!user) return setOrders([]);
-    api.orders(address).then((r) => setOrders(r.orders)).catch(() => setOrders([]));
+    api.orders(address).then((r) => {
+      setOrders((prev) => {
+        // Subtle ping when an open order flips to filled while watching.
+        const wasOpen = new Set(prev.filter((o) => o.status === "open").map((o) => o.id));
+        if (r.orders.some((o) => o.status === "filled" && wasOpen.has(o.id))) playOrderTriggered();
+        return r.orders;
+      });
+    }).catch(() => setOrders([]));
   }, [user, address]);
 
   useEffect(() => {
@@ -304,8 +313,10 @@ export default function TradePage() {
     setTradeMsg(null);
     try {
       let res;
+      const note = tradeNote.trim() ? tradeNote.trim().slice(0, 500) : undefined;
       if (side === "buy") {
-        res = await api.trade({ token: detail.address, side: "buy", amount: buyAmountUsd() });
+        res = await api.trade({ token: detail.address, side: "buy", amount: buyAmountUsd(), note });
+        playBuyFill();
         setTradeMsg(
           `Bought ${fmtCompact(Number(res.tokensOut) / 10 ** (detail.decimals ?? 18))} ${detail.symbol} for $${fmtUsd(res.usdIn, 2)} (impact ${res.priceImpactPct?.toFixed(2)}%)`
         );
@@ -313,11 +324,13 @@ export default function TradePage() {
         if (!position) throw new Error("no position");
         const pct = Math.min(Math.max(parseFloat(sellPct) || 0, 0), 100);
         const qty = (BigInt(position.qty) * BigInt(Math.round(pct * 100))) / 10000n;
-        res = await api.trade({ token: detail.address, side: "sell", amount: qty.toString() });
+        res = await api.trade({ token: detail.address, side: "sell", amount: qty.toString(), note });
+        playSellFill();
         setTradeMsg(
           `Sold for $${fmtUsd(res.usdOut, 2)} (realized ${res.realizedPnlUsd! >= 0 ? "+" : ""}$${fmtUsd(res.realizedPnlUsd, 2)})`
         );
       }
+      setTradeNote("");
       refreshPosition();
     } catch (e: any) {
       setTradeMsg(`Trade failed: ${e.message}`);
