@@ -113,7 +113,14 @@ export function listTokens(db: DatabaseSync, ethUsd: number | null): TokenListIt
 
 export interface Candle { t: number; o: number; h: number; l: number; c: number }
 
-const TF_SECONDS: Record<string, number> = { "1m": 60, "5m": 300, "1h": 3600, "1d": 86400 };
+const TF_SECONDS: Record<string, number> = {
+  "5s": 5, "15s": 15, "30s": 30,
+  "1m": 60, "5m": 300, "1h": 3600, "1d": 86400,
+};
+
+// Seconds views are served from raw poll snapshots (pruned at 24h), so cap
+// the lookback to keep payloads sane. 4h of 5s buckets is plenty.
+const SECONDS_MAX_LOOKBACK = 4 * 3600;
 
 function hourlyRows(db: DatabaseSync, pair: string, limit: number) {
   try {
@@ -146,6 +153,21 @@ function aggregate(rows: Candle[], step: number): Candle[] {
 export function getCandles(db: DatabaseSync, pair: string, tf: string, limit: number): Candle[] {
   const step = TF_SECONDS[tf];
   if (!step) throw new Error(`unsupported timeframe ${tf}`);
+
+  // Seconds timeframes: aggregate raw snapshots into buckets. Imported or
+  // backfilled tokens only have data from when polling started; that is fine.
+  if (step < 60) {
+    const since = Math.floor(Date.now() / 1000) - Math.min(limit * step, SECONDS_MAX_LOOKBACK);
+    const snaps = db.prepare(`
+      SELECT ts, price FROM snapshots
+      WHERE pair_address = ? COLLATE NOCASE AND ts >= ? AND price IS NOT NULL
+      ORDER BY ts ASC
+    `).all(pair, since) as { ts: number; price: number }[];
+    return aggregate(
+      snaps.map((r) => ({ t: r.ts, o: r.price, h: r.price, l: r.price, c: r.price })),
+      step
+    ).slice(-limit);
+  }
 
   // 1h and 1d are served from the hourly table (deep backfilled history),
   // merged with buckets aggregated from live 1m candles which are fresher.

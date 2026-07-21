@@ -50,7 +50,7 @@ interface TokenDetail {
   thinLiquidity?: boolean;
 }
 
-const TFS = ["1m", "5m", "1h", "1d"] as const;
+const TFS = ["5s", "15s", "30s", "1m", "5m", "1h", "1d"] as const;
 
 // Chart display state is independent of the trade form's currency; both keys
 // persist across visits. Chart defaults to MCap in USD.
@@ -225,9 +225,11 @@ export default function TradePage() {
   useEffect(() => {
     if (!address) return;
     api.candles(address, tf).then((r) => setCandles(r.candles)).catch(() => setCandles([]));
+    // Seconds views refresh at the indexer poll cadence; larger tfs stay lazy.
+    const refreshMs = tf.endsWith("s") ? 5000 : 15000;
     const id = setInterval(() => {
       api.candles(address, tf).then((r) => setCandles(r.candles)).catch(() => {});
-    }, 15000);
+    }, refreshMs);
     return () => clearInterval(id);
   }, [address, tf]);
 

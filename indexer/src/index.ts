@@ -4,7 +4,9 @@ import { runBackfill } from "./backfill.js";
 import { refreshSupplies } from "./supply.js";
 import { tagPonsPools } from "./pons.js";
 
-const POLL_MS = Number(process.env.POLL_INTERVAL_MS ?? 10_000);
+// 5s default cadence: one multicall per cycle, cheap on the RPC, and it
+// gives the seconds-resolution chart timeframes (5s/15s/30s) real data.
+const POLL_MS = Number(process.env.POLL_INTERVAL_MS ?? 5_000);
 const DISCOVERY_MS = Number(process.env.DISCOVERY_INTERVAL_MS ?? 15 * 60_000);
 
 let running = true;
