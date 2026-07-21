@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api, LeaderboardEntry, SeasonInfo, SeasonsResponse, fmtUsd } from "@/lib/api";
+import Link from "next/link";
+import { api, LeaderboardEntry, SeasonInfo, SeasonsResponse, FeeTotals, ReferralSummaryRow, fmtUsd, fmtCompact } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import PrizePoolBanner from "@/components/PrizePoolBanner";
 import { BadgeEmojis } from "@/components/Badges";
+import { ReferralFlair } from "@/components/ReferralFlair";
 
 type Period = "1d" | "7d" | "all" | "season";
 
@@ -26,12 +28,17 @@ export default function LeaderboardPage() {
   const [period, setPeriod] = useState<Period>("1d");
   const [metric, setMetric] = useState<"equity" | "realized">("equity");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+  const [realized, setRealized] = useState<LeaderboardEntry[]>([]);
+  const [referrers, setReferrers] = useState<ReferralSummaryRow[]>([]);
+  const [fees, setFees] = useState<FeeTotals | null>(null);
   const [season, setSeason] = useState<SeasonInfo | null>(null);
   const [seasons, setSeasons] = useState<SeasonsResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     api.seasons().then(setSeasons).catch(() => {});
+    api.fees().then(setFees).catch(() => {});
+    api.referralsSummary().then((r) => setReferrers(r.referrers.slice(0, 10))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -46,9 +53,17 @@ export default function LeaderboardPage() {
       }
       return api.leaderboardWindow(period, metric).then((r) => setEntries(r.entries));
     };
+    const loadRealized = () => {
+      if (period === "season") {
+        return api.leaderboardSeason("current", "realized").then((r) => setRealized(r.entries.slice(0, 10)));
+      }
+      return api.leaderboardWindow(period, "realized").then((r) => setRealized(r.entries.slice(0, 10)));
+    };
     load().catch((e) => setErr(e.message));
+    loadRealized().catch(() => {});
     const id = setInterval(() => {
       load().catch(() => {});
+      loadRealized().catch(() => {});
     }, 20000);
     return () => clearInterval(id);
   }, [period, metric]);
@@ -152,6 +167,79 @@ export default function LeaderboardPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Fee stats + side-by-side mini leaderboards */}
+      <section className="mt-6">
+        <div className="panel mb-3 flex flex-wrap items-center gap-x-6 gap-y-2 px-3 py-2.5">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-term-dim">Supply collected in fees</span>
+            <span className="num text-sm font-semibold">{fees ? fmtCompact(fees.supplyCollected) : "..."}</span>
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[11px] uppercase tracking-wider text-term-dim">ETH collected in fees</span>
+            <span className="num text-sm font-semibold">{fees ? fees.ethCollected.toLocaleString(undefined, { maximumFractionDigits: 4 }) : "..."}</span>
+          </div>
+          <span className="ml-auto text-[10px] text-term-dim">updated manually</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div className="panel px-3 py-2.5">
+            <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">
+              Realized PnL from trades
+            </h2>
+            <div className="space-y-1">
+              {realized.map((e, i) => {
+                const pnl = e.pnlUsd ?? e.realizedPnlUsd;
+                return (
+                  <div key={e.userId} className="flex items-center gap-2 text-[13px]">
+                    <span className="num w-5 text-term-dim">{i + 1}</span>
+                    <Link href={`/u/${e.address}`} className="num hover:text-term-accent hover:underline" title="View trader profile">
+                      {e.display}
+                    </Link>
+                    <ReferralFlair flair={e.referralFlair} />
+                    <span className={`num ml-auto ${pnl >= 0 ? "text-term-green" : "text-term-red"}`}>
+                      {pnl >= 0 ? "+" : "-"}${fmtUsd(Math.abs(pnl), 2)}
+                    </span>
+                  </div>
+                );
+              })}
+              {!realized.length && (
+                <div className="py-6 text-center text-xs text-term-dim">No realized trades in this window yet.</div>
+              )}
+            </div>
+          </div>
+          <div className="panel px-3 py-2.5">
+            <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-term-dim">
+              Referral leaderboard
+            </h2>
+            <div className="space-y-1">
+              {referrers.map((r, i) => (
+                <div key={r.userId} className="flex items-center gap-2 text-[13px]">
+                  <span className="num w-5 text-term-dim">{i + 1}</span>
+                  <Link
+                    href={`/u/${r.address}`}
+                    className="num hover:text-term-accent hover:underline"
+                    title="View trader profile"
+                  >
+                    {r.address.slice(0, 6)}...{r.address.slice(-4)}
+                  </Link>
+                  {r.tierName && (
+                    <span className="rounded-full border border-term-line px-2 text-[10px] text-term-dim">{r.tierName}</span>
+                  )}
+                  <ReferralFlair flair={r.tier != null && r.tier >= 3 ? "gold" : r.tier != null && r.tier >= 2 ? "silver" : null} />
+                  <span className="num ml-auto text-term-dim">
+                    {r.qualified} qualified
+                  </span>
+                </div>
+              ))}
+              {!referrers.length && (
+                <div className="py-6 text-center text-xs text-term-dim">
+                  No referrers yet. Share your link on the <Link href="/referrals" className="text-term-accent hover:underline">Referrals</Link> page.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {seasons && seasons.archive.length > 0 && (
         <section className="mt-6">

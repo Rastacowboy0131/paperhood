@@ -16,6 +16,7 @@ import { snapshotUser, snapshotActiveUsers, getEquityCurve } from "../../engine/
 import { registerAuthRoutes, requireAuth, SessionUser } from "./auth.js";
 import { registerReferralRoutes } from "./referrals.js";
 import { referralFlairForUsers } from "../../engine/src/referrals.js";
+import { getFeeTotals } from "../../engine/src/fees.js";
 import { listTokens, getCandles, poolForToken, latestPrice, price24hAgo } from "./market.js";
 import { getPoolTrades, aggregateTopTraders, getHolders, getPaperTrades, RateLimitedError, EXPLORER_URL } from "./tokeninfo.js";
 import { importToken, ImportError, THIN_LIQ_USD } from "../../engine/src/import.js";
@@ -740,6 +741,14 @@ export async function buildServer(opts: BuildOpts = {}) {
     };
     prizeCache = { at: now, body };
     return body;
+  });
+
+  // ---------- platform fees ----------
+  // Totals Rasta has collected in platform fees. Manual env-based values for
+  // now (see engine/src/fees.ts); an on-chain reader will replace the source
+  // once the fee wallet and token CA are wired up.
+  app.get("/fees", async () => {
+    return getFeeTotals();
   });
 
   // ---------- recap ----------

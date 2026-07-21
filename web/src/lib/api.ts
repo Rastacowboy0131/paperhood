@@ -142,6 +142,23 @@ export interface LeaderboardEntry {
   referralFlair?: "silver" | "gold" | null;
 }
 
+export interface FeeTotals {
+  supplyCollected: number;
+  ethCollected: number;
+  source: "manual" | "onchain";
+  updatedAt: number | null;
+}
+
+export interface ReferralSummaryRow {
+  userId: number;
+  address: string;
+  signups: number;
+  qualified: number;
+  tier: number | null;
+  tierName: string | null;
+  rewardLabel: string | null;
+}
+
 export interface BadgeDef {
   key: string;
   label: string;
@@ -366,6 +383,9 @@ export const api = {
   leaderboardSeason: (season: number | "current", metric: "equity" | "realized" = "equity") =>
     req<{ season: SeasonInfo; entries: LeaderboardEntry[] }>(`/leaderboard?season=${season}&metric=${metric}`),
   seasons: () => req<SeasonsResponse>("/seasons"),
+  fees: () => req<FeeTotals>("/fees"),
+  referralsSummary: () =>
+    req<{ referrers: ReferralSummaryRow[] }>("/referrals/summary"),
   closedTrades: (page = 1, pageSize = 20) =>
     req<{ page: number; pageSize: number; total: number; trades: ClosedTrade[] }>(
       `/portfolio/closed?page=${page}&pageSize=${pageSize}`
