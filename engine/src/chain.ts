@@ -49,6 +49,7 @@ export const quoterV2Abi = parseAbi([
 export const erc20Abi = parseAbi([
   "function decimals() view returns (uint8)",
   "function symbol() view returns (string)",
+  "function totalSupply() view returns (uint256)",
 ]);
 
 export const v3PoolAbi = parseAbi([

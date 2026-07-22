@@ -166,6 +166,12 @@ export default function TradePage() {
     } catch {}
   }, []);
 
+  // MCap mode needs a total supply; without one the multiplier collapses and
+  // the axis renders $0.00. Fall back to price mode until supply is known.
+  useEffect(() => {
+    if (metric === "mcap" && detail && detail.totalSupply == null) setMetric("price");
+  }, [metric, detail]);
+
   const changeMetric = useCallback((m: "price" | "mcap") => {
     setMetric(m);
     try { localStorage.setItem(CHART_METRIC_KEY, m); } catch {}

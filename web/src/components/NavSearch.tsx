@@ -100,8 +100,34 @@ export function NavSearch() {
           if (e.key === "Enter") void submit();
           if (e.key === "Escape") setOpen(false);
         }}
-        className="h-8 w-full rounded-md border border-term-border bg-term-raised px-2.5 text-[16px] text-term-text placeholder:text-term-dim focus:border-term-accent focus:outline-none md:text-xs"
+        className="h-8 w-full rounded-md border border-term-border bg-term-raised px-2.5 pr-8 text-[16px] text-term-text placeholder:text-term-dim focus:border-term-accent focus:outline-none md:text-xs"
       />
+      <div className="absolute right-1 top-1 flex items-center gap-0.5">
+        <button
+          type="button"
+          title="Paste"
+          aria-label="Paste contract address"
+          onClick={async () => {
+            try {
+              const text = await navigator.clipboard.readText();
+              if (text) {
+                setQ(text.trim());
+                setOpen(true);
+                setErr(null);
+              }
+            } catch {
+              setErr("Clipboard blocked, paste manually");
+              setOpen(true);
+            }
+          }}
+          className="flex h-6 w-6 items-center justify-center rounded text-term-dim hover:bg-term-raised hover:text-term-text"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+        </button>
+      </div>
       {open && (query.length > 0 || err) && (
         <div className="absolute left-0 right-0 top-9 z-30 overflow-hidden rounded-md border border-term-border bg-term-panel shadow-lg">
           {err && <div className="px-3 py-2 text-xs text-term-red">{err}</div>}

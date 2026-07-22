@@ -134,6 +134,21 @@ async function verifyPoolOnChain(pair: string, labelHint: string): Promise<Verif
 }
 
 // Quote tokens per 1 tracked token, decimal adjusted (mirrors indexer price.ts).
+// Read the tracked token's total supply right at import time so MCap mode
+// works immediately instead of waiting for the indexer's periodic refresh.
+async function storeTotalSupply(db: DatabaseSync, token: string, pair: string): Promise<void> {
+  try {
+    const [sup, dec] = await Promise.all([
+      client.readContract({ address: token as `0x${string}`, abi: erc20Abi, functionName: "totalSupply" }),
+      client.readContract({ address: token as `0x${string}`, abi: erc20Abi, functionName: "decimals" }),
+    ]);
+    const supply = Number(sup as bigint) / 10 ** Number(dec);
+    if (!Number.isFinite(supply) || supply <= 0) return;
+    const now = Math.floor(Date.now() / 1000);
+    db.prepare("UPDATE pools SET total_supply = ?, supply_ts = ? WHERE pair_address = ? COLLATE NOCASE").run(supply, now, pair);
+  } catch { /* indexer refresh fills it in later */ }
+}
+
 function poolPrice(v: VerifiedPool, tracked: string): number {
   const trackedIsToken0 = tracked === v.token0;
   let token1PerToken0: number;
@@ -270,6 +285,8 @@ export async function importToken(db: DatabaseSync, address: string): Promise<Im
       high = MAX(high, excluded.close), low = MIN(low, excluded.close), close = excluded.close, n = n + 1
   `).run(p.pairAddress, minute, price, price, price, price);
 
+  await storeTotalSupply(db, token, p.pairAddress);
+
   // Tag Pons launchpad tokens even when the pair came from dexscreener, so
   // the web can badge them and show graduation progress. One cheap RPC read;
   // failures just leave the tag off.
@@ -351,6 +368,8 @@ export async function importPonsToken(
     ON CONFLICT(pair_address, minute) DO UPDATE SET
       high = MAX(high, excluded.close), low = MIN(low, excluded.close), close = excluded.close, n = n + 1
   `).run(pons.pool, minute, price, price, price, price);
+
+  await storeTotalSupply(db, pons.token, pons.pool);
 
   return {
     address: pons.token,
