@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { TourHelpButton } from "@/components/Tour";
 import { SoundToggle } from "@/components/SoundToggle";
 import { ShortcutHelpButton } from "@/components/KeyboardShortcuts";
+import { NavSearch } from "@/components/NavSearch";
 
 const links = [
   { href: "/", label: "Screener" },
@@ -45,6 +46,7 @@ export function Nav() {
             </Link>
           ))}
         </nav>
+        <NavSearch />
         <div className="ml-auto flex h-14 items-center gap-1.5 text-sm sm:gap-2">
           <TourHelpButton />
           <ShortcutHelpButton />
